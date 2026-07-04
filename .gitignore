@@ -10,3 +10,7 @@
 local.properties
 /app/build
 /app/release
+*.jar
+gradlew
+gradlew.bat
+gradle/wrapper/gradle-wrapper.jar
