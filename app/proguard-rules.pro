@@ -1,0 +1,2 @@
+-dontwarn de.robv.android.xposed.**
+-keep class de.robv.android.xposed.** { *; }
