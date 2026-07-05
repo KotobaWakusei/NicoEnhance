@@ -8,19 +8,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.NicoEnhance">
 
-        <meta-data
-            android:name="xposedmodule"
-            android:value="true" />
-        <meta-data
-            android:name="xposeddescription"
-            android:value="niconico增强模块" />
-        <meta-data
-            android:name="xposedminversion"
-            android:value="82" />
-        <meta-data
-            android:name="xposedscope"
-            android:resource="@array/xposedscope" />
-
         <activity
             android:name=".MainActivity"
             android:exported="true"

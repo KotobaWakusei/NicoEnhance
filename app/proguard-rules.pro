@@ -1,2 +1,3 @@
--dontwarn de.robv.android.xposed.**
--keep class de.robv.android.xposed.** { *; }
+-dontwarn io.github.libxposed.**
+-keep class io.github.libxposed.api.** { *; }
+-keep class io.github.nicoenhance.NicoEnhance { *; }
