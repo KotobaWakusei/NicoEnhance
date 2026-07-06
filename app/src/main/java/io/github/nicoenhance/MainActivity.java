@@ -95,9 +95,10 @@ public class MainActivity extends AppCompatActivity {
 
         updateStatus.setText("检查中...");
         new Thread(() -> {
+            HttpURLConnection conn = null;
             try {
                 URL url = new URL(RELEASES_API);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
                 conn.setRequestProperty("User-Agent", "NicoEnhance");
                 conn.setConnectTimeout(10000);
@@ -138,6 +139,8 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 String msg = e.getMessage();
                 runOnUiThread(() -> updateStatus.setText("检查失败" + (msg != null ? ": " + msg : "")));
+            } finally {
+                if (conn != null) conn.disconnect();
             }
         }).start();
     }

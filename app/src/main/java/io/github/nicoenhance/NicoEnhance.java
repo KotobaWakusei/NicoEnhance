@@ -71,6 +71,8 @@ public class NicoEnhance extends XposedModule {
     private static final String CONFIG_CANCEL = "\u53d6\u6d88";
     private static final String CONFIG_SAVED = "\u5df2\u4fdd\u5b58\uff0c\u90e8\u5206\u9875\u9762\u9700\u91cd\u65b0\u8fdb\u5165\u6216\u91cd\u542f niconico";
 
+    private static final int MAX_VIEW_DEPTH = 50;
+
     private TranslationRepository repo;
     private final ModuleConfig config = new ModuleConfig();
     private final AtomicBoolean resourceHooksInstalled = new AtomicBoolean();
@@ -698,11 +700,16 @@ public class NicoEnhance extends XposedModule {
     }
 
     private ViewGroup findTitleBar(View view) {
+        return findTitleBar(view, 0);
+    }
+
+    private ViewGroup findTitleBar(View view, int depth) {
+        if (depth > MAX_VIEW_DEPTH) return null;
         if (!(view instanceof ViewGroup) || view.getVisibility() != View.VISIBLE) return null;
         ViewGroup g = (ViewGroup) view;
         if (isTitleBarCandidate(g)) return g;
         for (int i = 0; i < g.getChildCount(); i++) {
-            ViewGroup found = findTitleBar(g.getChildAt(i));
+            ViewGroup found = findTitleBar(g.getChildAt(i), depth + 1);
             if (found != null) return found;
         }
         return null;
@@ -739,6 +746,11 @@ public class NicoEnhance extends XposedModule {
     }
 
     private boolean containsSettingsTitle(View view) {
+        return containsSettingsTitle(view, 0);
+    }
+
+    private boolean containsSettingsTitle(View view, int depth) {
+        if (depth > MAX_VIEW_DEPTH) return false;
         if (view instanceof TextView) {
             if (isSettingsTitle(((TextView) view).getText())) return true;
         }
@@ -746,17 +758,22 @@ public class NicoEnhance extends XposedModule {
         if (!(view instanceof ViewGroup)) return false;
         ViewGroup g = (ViewGroup) view;
         for (int i = 0; i < g.getChildCount(); i++) {
-            if (containsSettingsTitle(g.getChildAt(i))) return true;
+            if (containsSettingsTitle(g.getChildAt(i), depth + 1)) return true;
         }
         return false;
     }
 
     private View findSettingsTitleView(View view) {
+        return findSettingsTitleView(view, 0);
+    }
+
+    private View findSettingsTitleView(View view, int depth) {
+        if (depth > MAX_VIEW_DEPTH) return null;
         if (view instanceof TextView && isSettingsTitle(((TextView) view).getText())) return view;
         if (!(view instanceof ViewGroup)) return null;
         ViewGroup g = (ViewGroup) view;
         for (int i = 0; i < g.getChildCount(); i++) {
-            View found = findSettingsTitleView(g.getChildAt(i));
+            View found = findSettingsTitleView(g.getChildAt(i), depth + 1);
             if (found != null) return found;
         }
         return null;
@@ -786,11 +803,16 @@ public class NicoEnhance extends XposedModule {
     }
 
     private TextView findAboutAppTextView(View view) {
+        return findAboutAppTextView(view, 0);
+    }
+
+    private TextView findAboutAppTextView(View view, int depth) {
+        if (depth > MAX_VIEW_DEPTH) return null;
         if (view instanceof TextView && isAboutAppText(((TextView) view).getText())) return (TextView) view;
         if (!(view instanceof ViewGroup)) return null;
         ViewGroup g = (ViewGroup) view;
         for (int i = 0; i < g.getChildCount(); i++) {
-            TextView found = findAboutAppTextView(g.getChildAt(i));
+            TextView found = findAboutAppTextView(g.getChildAt(i), depth + 1);
             if (found != null) return found;
         }
         return null;
@@ -961,7 +983,9 @@ public class NicoEnhance extends XposedModule {
             for (Method m : candidates) {
                 if (isInAppAdFactoryMethod(m)) count += hookInAppAdFactoryMethod(m, "dexkit");
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "DexKit in-app ad factory search failed", t);
+        }
         return count;
     }
 
@@ -1086,7 +1110,9 @@ public class NicoEnhance extends XposedModule {
                     "jp.nicovideo.android.ui.base.compose.container.AdBannerContainer (AdBannerContainer.kt:33)")) {
                 if (isComposeAdBannerMethod(m)) count += hookComposeAdBannerMethod(m, "dexkit");
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "DexKit Compose ad banner search failed", t);
+        }
         return count;
     }
 
@@ -1778,7 +1804,11 @@ public class NicoEnhance extends XposedModule {
     }
 
     private void translateViewTree(View view) {
-        if (view == null) return;
+        translateViewTree(view, 0);
+    }
+
+    private void translateViewTree(View view, int depth) {
+        if (view == null || depth > MAX_VIEW_DEPTH) return;
         String cd = findExactText(view.getContentDescription());
         if (cd != null) view.setContentDescription(cd);
         if (view instanceof TextView) {
@@ -1790,7 +1820,7 @@ public class NicoEnhance extends XposedModule {
         }
         if (view instanceof ViewGroup) {
             ViewGroup g = (ViewGroup) view;
-            for (int i = 0; i < g.getChildCount(); i++) translateViewTree(g.getChildAt(i));
+            for (int i = 0; i < g.getChildCount(); i++) translateViewTree(g.getChildAt(i), depth + 1);
         }
     }
 

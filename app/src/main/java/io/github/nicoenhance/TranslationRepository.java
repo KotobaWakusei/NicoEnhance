@@ -137,12 +137,16 @@ public class TranslationRepository {
     public static boolean containsJapanese(String text) {
         for (int i = 0; i < text.length(); ) {
             int cp = text.codePointAt(i);
+            // Hiragana, Katakana, CJK Unified Ideographs, CJK Compatibility Ideographs,
+            // CJK Extension A/B, CJK Symbols and Punctuation, Fullwidth forms
             if ((cp >= 0x3040 && cp <= 0x30ff) ||
                 (cp >= 0x31f0 && cp <= 0x31ff) ||
                 (cp >= 0x3400 && cp <= 0x4dbf) ||
                 (cp >= 0x4e00 && cp <= 0x9fff) ||
                 (cp >= 0xf900 && cp <= 0xfaff) ||
-                (cp >= 0x20000 && cp <= 0x2ebef))
+                (cp >= 0x20000 && cp <= 0x2ebef) ||
+                (cp >= 0x3000 && cp <= 0x303f) ||
+                (cp >= 0xff00 && cp <= 0xffef))
                 return true;
             i += Character.charCount(cp);
         }
