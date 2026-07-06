@@ -151,7 +151,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public boolean isModuleActive() {
-        return isSelfHooked();
+        return isSelfHooked()
+                || new java.io.File(getFilesDir(), ".module_active").exists()
+                || new java.io.File("/data/data/" + getPackageName() + "/files/.module_active").exists();
     }
 
     public static boolean isSelfHooked() {
