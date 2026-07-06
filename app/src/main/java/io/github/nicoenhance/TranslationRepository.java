@@ -31,6 +31,7 @@ public class TranslationRepository {
 
     private final Map<Integer, Optional<String>> stringCache = new ConcurrentHashMap<>();
     private final Map<Integer, Optional<String>> pluralCache = new ConcurrentHashMap<>();
+    private final Map<String, Optional<String>> exactCache = new ConcurrentHashMap<>();
 
     public TranslationRepository(StringTranslations strings, StringTranslations exact, StringTranslations phrases) {
         this.strings = strings;
@@ -71,8 +72,14 @@ public class TranslationRepository {
                 if (!TARGET_PACKAGE.equals(res.getResourcePackageName(id))) return Optional.empty();
                 String type = res.getResourceTypeName(id);
                 if (!STRING_TYPE.equals(type)) return Optional.empty();
-                return Optional.ofNullable(strings.get(res.getResourceEntryName(id)));
-            } catch (Throwable ignored) {
+                String name = res.getResourceEntryName(id);
+                String t = strings.get(name);
+                if (t == null) {
+                    Log.w(TAG, "MISS: " + name);
+                }
+                return Optional.ofNullable(t);
+            } catch (Throwable t) {
+                Log.w(TAG, "findString error", t);
                 return Optional.empty();
             }
         }).orElse(null);
@@ -85,7 +92,8 @@ public class TranslationRepository {
                 String type = res.getResourceTypeName(id);
                 if (!PLURALS_TYPE.equals(type)) return Optional.empty();
                 return Optional.ofNullable(strings.get("plurals." + res.getResourceEntryName(id)));
-            } catch (Throwable ignored) {
+            } catch (Throwable t) {
+                Log.w(TAG, "findQuantityString error", t);
                 return Optional.empty();
             }
         }).orElse(null);
@@ -97,7 +105,8 @@ public class TranslationRepository {
             String type = res.getResourceTypeName(id);
             if (!ARRAY_TYPE.equals(type) && !STRING_ARRAY_TYPE.equals(type)) return null;
             return strings.get("array." + res.getResourceEntryName(id) + "." + index);
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            Log.w(TAG, "findArrayItem error", t);
             return null;
         }
     }
@@ -105,10 +114,12 @@ public class TranslationRepository {
     public String findExactText(CharSequence source) {
         if (source == null) return null;
         String text = source.toString();
-        String result = exact.get(text);
-        if (result != null) return result;
-        if (!containsJapanese(text)) return null;
-        return phrases.replacePhrases(text);
+        return exactCache.computeIfAbsent(text, key -> {
+            String result = exact.get(key);
+            if (result != null) return Optional.of(result);
+            if (!containsJapanese(key)) return Optional.empty();
+            return Optional.ofNullable(phrases.replacePhrases(key));
+        }).orElse(null);
     }
 
     public String translateText(String source) {

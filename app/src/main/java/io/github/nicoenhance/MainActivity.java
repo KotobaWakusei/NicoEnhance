@@ -10,13 +10,13 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Properties;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -24,18 +24,19 @@ public class MainActivity extends AppCompatActivity {
     private static final String RELEASES_API = "https://api.github.com/repos/KotobaWakusei/NicoEnhance/releases/latest";
 
     private TextView updateStatus;
+    private String currentVersion;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        String version = "1.0";
+        currentVersion = "1.0";
         try {
-            version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
         } catch (PackageManager.NameNotFoundException ignored) {}
 
-        ((TextView) findViewById(R.id.versionInfo)).setText("版本：" + version);
+        ((TextView) findViewById(R.id.versionInfo)).setText("版本：" + currentVersion);
         updateStatus = findViewById(R.id.updateStatus);
 
         checkModuleStatus();
@@ -68,34 +69,43 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadTranslationStats() {
         try {
-            android.content.res.AssetManager am = getAssets();
-            java.util.Properties sp = new java.util.Properties();
-            java.util.Properties ep = new java.util.Properties();
-            java.util.Properties pp = new java.util.Properties();
-            sp.load(am.open("translations/zh-CN/strings.properties"));
-            ep.load(am.open("translations/zh-CN/exact.properties"));
-            pp.load(am.open("translations/zh-CN/phrases.properties"));
+            Properties sp = new Properties();
+            Properties ep = new Properties();
+            Properties pp = new Properties();
+            sp.load(getAssets().open("translations/zh-CN/strings.properties"));
+            ep.load(getAssets().open("translations/zh-CN/exact.properties"));
+            pp.load(getAssets().open("translations/zh-CN/phrases.properties"));
 
             ((TextView) findViewById(R.id.statTotal)).setText(String.valueOf(sp.size()));
             ((TextView) findViewById(R.id.statExact)).setText(String.valueOf(ep.size()));
             ((TextView) findViewById(R.id.statPhrase)).setText(String.valueOf(pp.size()));
-        } catch (Throwable ignored) {
+        } catch (Exception e) {
+            ((TextView) findViewById(R.id.statTotal)).setText("?");
+            ((TextView) findViewById(R.id.statExact)).setText("?");
+            ((TextView) findViewById(R.id.statPhrase)).setText("?");
         }
     }
 
     private void checkForUpdates() {
+        long lastCheck = getPreferences(MODE_PRIVATE).getLong("last_update_check", 0);
+        if (System.currentTimeMillis() - lastCheck < 60000) {
+            updateStatus.setText("请勿频繁检查");
+            return;
+        }
+
         updateStatus.setText("检查中...");
         new Thread(() -> {
             try {
                 URL url = new URL(RELEASES_API);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
+                conn.setRequestProperty("User-Agent", "NicoEnhance");
                 conn.setConnectTimeout(10000);
                 conn.setReadTimeout(10000);
 
                 int code = conn.getResponseCode();
                 if (code != 200) {
-                    runOnUiThread(() -> updateStatus.setText("检查失败"));
+                    runOnUiThread(() -> updateStatus.setText("检查失败 (" + code + ")"));
                     return;
                 }
 
@@ -106,20 +116,19 @@ public class MainActivity extends AppCompatActivity {
                 br.close();
 
                 JSONObject release = new JSONObject(sb.toString());
-                String latestTag = release.optString("tag_name", "");
+                String latestTag = release.optString("tag_name", "").replaceAll("^v", "");
                 String latestName = release.optString("name", "");
-                String htmlUrl = release.optString("html_url", "");
                 String body = release.optString("body", "");
 
-                String currentVer = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                getPreferences(MODE_PRIVATE).edit().putLong("last_update_check", System.currentTimeMillis()).apply();
 
                 runOnUiThread(() -> {
                     if (latestTag.isEmpty()) {
                         updateStatus.setText("无发布版本");
                         return;
                     }
-                    if (!latestTag.equals(currentVer)) {
-                        updateStatus.setText("发现新版本: " + latestTag);
+                    if (!latestTag.equals(currentVersion)) {
+                        updateStatus.setText("发现新版本: v" + latestTag);
                         Toast.makeText(this, "新版本: " + latestName + "\n" + body, Toast.LENGTH_LONG).show();
                     } else {
                         updateStatus.setText("已是最新版本");
@@ -127,7 +136,8 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> updateStatus.setText("检查失败"));
+                String msg = e.getMessage();
+                runOnUiThread(() -> updateStatus.setText("检查失败" + (msg != null ? ": " + msg : "")));
             }
         }).start();
     }
