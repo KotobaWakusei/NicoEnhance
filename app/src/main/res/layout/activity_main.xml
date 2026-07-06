@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/md3_background">
+    android:background="?android:colorBackground">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -19,7 +19,7 @@
             android:gravity="center"
             android:orientation="vertical"
             android:paddingTop="32dp"
-            android:paddingBottom="24dp">
+            android:paddingBottom="16dp">
 
             <ImageView
                 android:layout_width="72dp"
@@ -33,33 +33,25 @@
                 android:text="@string/app_name"
                 android:textSize="28sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary"
+                android:textColor="?android:attr/textColorPrimary"
                 android:layout_marginTop="12dp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="niconico增强模块"
+                android:text="niconico 增强模块"
                 android:textSize="14sp"
-                android:textColor="@color/text_secondary"
+                android:textColor="?android:attr/textColorSecondary"
                 android:layout_marginTop="4dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Beta 测试版"
-                android:textSize="12sp"
-                android:textColor="@color/nico_red"
-                android:layout_marginTop="2dp" />
         </LinearLayout>
 
         <!-- ====== Status Card ====== -->
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/statusCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="@color/card_background"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Medium"
+            app:strokeWidth="0dp"
             android:layout_marginBottom="12dp">
 
             <LinearLayout
@@ -74,14 +66,14 @@
                     android:text="模块状态"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
+                    android:textColor="?android:attr/textColorPrimary" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_marginTop="12dp">
+                    android:layout_marginTop="8dp">
 
                     <View
                         android:id="@+id/statusDot"
@@ -93,29 +85,37 @@
                         android:id="@+id/statusText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="  LSPosed 模块未激活"
+                        android:text="检查中..."
                         android:textSize="14sp"
-                        android:textColor="@color/text_secondary" />
-
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:layout_marginStart="8dp" />
                 </LinearLayout>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="目标：jp.nicovideo.android"
-                    android:textSize="14sp"
-                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp"
+                    android:textColor="?android:attr/textColorTertiary"
                     android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:id="@+id/versionInfo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="v1.0.0"
+                    android:textSize="12sp"
+                    android:textColor="?android:attr/textColorTertiary"
+                    android:layout_marginTop="8dp" />
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- ====== Translation Stats ====== -->
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="@color/card_background"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Medium"
+            app:strokeWidth="0dp"
             android:layout_marginBottom="12dp">
 
             <LinearLayout
@@ -130,7 +130,7 @@
                     android:text="翻译统计"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
+                    android:textColor="?android:attr/textColorPrimary" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -159,7 +159,7 @@
                             android:layout_height="wrap_content"
                             android:text="资源键"
                             android:textSize="12sp"
-                            android:textColor="@color/text_secondary"
+                            android:textColor="?android:attr/textColorSecondary"
                             android:layout_marginTop="4dp" />
                     </LinearLayout>
 
@@ -184,7 +184,7 @@
                             android:layout_height="wrap_content"
                             android:text="精确文本"
                             android:textSize="12sp"
-                            android:textColor="@color/text_secondary"
+                            android:textColor="?android:attr/textColorSecondary"
                             android:layout_marginTop="4dp" />
                     </LinearLayout>
 
@@ -209,20 +209,84 @@
                             android:layout_height="wrap_content"
                             android:text="短语"
                             android:textSize="12sp"
-                            android:textColor="@color/text_secondary"
+                            android:textColor="?android:attr/textColorSecondary"
                             android:layout_marginTop="4dp" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
-        <!-- ====== About Card ====== -->
-        <androidx.cardview.widget.CardView
+        <!-- ====== Features Preview ====== -->
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="@color/card_background"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Medium"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="功能列表"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="?android:attr/textColorPrimary" />
+
+                <TextView
+                    android:text="- 界面汉化（2267+ 字符串）"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="14sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginTop="12dp"
+                    android:drawablePadding="8dp" />
+
+                <TextView
+                    android:text="- 广告移除"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="14sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginTop="6dp" />
+
+                <TextView
+                    android:text="- WebView 翻译"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="14sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginTop="6dp" />
+
+                <TextView
+                    android:text="- 高级会员解锁"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="14sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginTop="6dp" />
+
+                <TextView
+                    android:text="- Compose / Preference 翻译"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="14sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginTop="6dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ====== About ====== -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Medium"
+            app:strokeWidth="0dp"
             android:layout_marginBottom="12dp">
 
             <LinearLayout
@@ -237,29 +301,20 @@
                     android:text="关于"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
+                    android:textColor="?android:attr/textColorPrimary" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="通过 LSPosed 注入 niconico 动画，提供界面汉化等多种增强功能。"
+                    android:text="基于 LSPosed 框架注入 niconico 动画客户端，提供界面汉化、广告移除等多种增强功能。配置入口在 niconico 设置页面中。"
                     android:textSize="14sp"
-                    android:textColor="@color/text_secondary"
+                    android:textColor="?android:attr/textColorSecondary"
                     android:layout_marginTop="8dp"
                     android:lineSpacingExtra="4dp" />
-
-                <TextView
-                    android:id="@+id/versionInfo"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="版本：1.0"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_tertiary"
-                    android:layout_marginTop="12dp" />
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
-        <!-- ====== GitHub + Check Update ====== -->
+        <!-- ====== Actions ====== -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -267,25 +322,24 @@
             android:gravity="center_vertical"
             android:layout_marginBottom="12dp">
 
-            <androidx.cardview.widget.CardView
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/githubCard"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginEnd="6dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/card_background">
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Medium"
+                app:strokeWidth="0dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?android:attr/selectableItemBackground">
 
                 <LinearLayout
-                    android:id="@+id/githubCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
                     android:orientation="vertical"
-                    android:padding="16dp"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:background="?android:attr/selectableItemBackground">
+                    android:padding="16dp">
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -299,7 +353,7 @@
                         android:text="GitHub"
                         android:textSize="14sp"
                         android:textStyle="bold"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?android:attr/textColorPrimary"
                         android:layout_marginTop="4dp" />
 
                     <TextView
@@ -307,44 +361,32 @@
                         android:layout_height="wrap_content"
                         android:text="开源仓库"
                         android:textSize="11sp"
-                        android:textColor="@color/text_secondary" />
+                        android:textColor="?android:attr/textColorSecondary" />
                 </LinearLayout>
-            </androidx.cardview.widget.CardView>
+            </com.google.android.material.card.MaterialCardView>
 
-            <androidx.cardview.widget.CardView
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/updateCard"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="6dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/card_background">
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Medium"
+                app:strokeWidth="0dp">
 
                 <LinearLayout
-                    android:id="@+id/updateCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
                     android:orientation="vertical"
-                    android:padding="16dp"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:background="?android:attr/selectableItemBackground">
+                    android:padding="16dp">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="🔄"
-                        android:textSize="24sp" />
-
-                    <TextView
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/checkUpdateBtn"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="检查更新"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_primary"
-                        android:layout_marginTop="4dp" />
+                        android:textSize="14sp" />
 
                     <TextView
                         android:id="@+id/updateStatus"
@@ -352,15 +394,14 @@
                         android:layout_height="wrap_content"
                         android:text="点击检查"
                         android:textSize="11sp"
-                        android:textColor="@color/text_secondary" />
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:layout_marginTop="8dp" />
                 </LinearLayout>
-            </androidx.cardview.widget.CardView>
+            </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
-        <!-- 底部留白 -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="32dp" />
+        <!-- spacer -->
+        <View android:layout_width="match_parent" android:layout_height="32dp" />
 
     </LinearLayout>
 </ScrollView>

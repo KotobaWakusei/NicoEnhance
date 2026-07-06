@@ -12,7 +12,7 @@
 
         <meta-data android:name="xposedmodule" android:value="true" />
         <meta-data android:name="xposeddescription" android:value="niconico增强模块" />
-        <meta-data android:name="xposedminversion" android:value="101" />
+        <meta-data android:name="xposedminversion" android:value="102" />
         <meta-data android:name="xposedscope" android:resource="@array/xposedscope" />
 
         <activity
