@@ -8,15 +8,25 @@ android {
 
     defaultConfig {
         applicationId = "io.github.nicoenhance"
-        minSdk = 26
+        minSdk = 29
         targetSdk = 36
         versionCode = 2
         versionName = "1.0-beta1"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore/nicoenhance.jks")
+            storePassword = "nicoenhance"
+            keyAlias = "nicoenhance"
+            keyPassword = "nicoenhance"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
