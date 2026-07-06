@@ -87,6 +87,21 @@ public class NicoEnhance extends XposedModule {
             if (repo == null) repo = TranslationRepository.fromModuleApk(getModuleApplicationInfo().sourceDir);
             installResourceHooks();
         } else if (MODULE.equals(pkg)) {
+            installSelfHook();
+        }
+    }
+
+    private void installSelfHook() {
+        try {
+            Class<?> mainActivity = MainActivity.class;
+            Method isSelfHooked = mainActivity.getDeclaredMethod("isSelfHooked");
+            isSelfHooked.setAccessible(true);
+            hook(isSelfHooked)
+                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                    .intercept(chain -> true);
+            log(Log.INFO, TAG, "Self-hook installed: isSelfHooked() -> true");
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "Self-hook failed, falling back to file check", t);
             writeSelfCheckFlag();
         }
     }
