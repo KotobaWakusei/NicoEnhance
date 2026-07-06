@@ -1456,9 +1456,6 @@ public class NicoEnhance extends XposedModule {
             String script = translateSupporterRendererScript(readTargetAsset(webView, SUPPORTER_RENDERER_SCRIPT_ASSET));
             String html = "<!DOCTYPE html>"
                     + "<html><head>"
-                    + "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">"
-                    + "<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>"
-                    + "<link href=\"https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c&display=swap\" rel=\"stylesheet\">"
                     + "<link rel=\"stylesheet\" href=\"./index.css\">"
                     + "</head><body><div id=\"app\" width=\"1280\" height=\"720\"></div>"
                     + "<script>" + script.replace("</script", "<\\/script") + "</script>"
