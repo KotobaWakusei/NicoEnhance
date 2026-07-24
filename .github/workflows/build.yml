@@ -14,6 +14,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      KS_STORE_PASSWORD: ${{ secrets.KS_STORE_PASSWORD }}
+      KS_KEY_ALIAS:     ${{ secrets.KS_KEY_ALIAS }}
+      KS_KEY_PASSWORD:  ${{ secrets.KS_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 

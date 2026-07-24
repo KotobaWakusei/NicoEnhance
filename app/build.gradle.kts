@@ -2,6 +2,24 @@ plugins {
     id("com.android.application")
 }
 
+val keystoreProperties = java.util.Properties().apply {
+    val propsFile = rootProject.file("local.properties")
+    if (propsFile.exists()) {
+        propsFile.inputStream().use { load(it) }
+    } else {
+        val env = System.getenv()
+        if (env.containsKey("KS_STORE_PASSWORD")) {
+            setProperty("storePassword", env["KS_STORE_PASSWORD"])
+        }
+        if (env.containsKey("KS_KEY_ALIAS")) {
+            setProperty("keyAlias", env["KS_KEY_ALIAS"])
+        }
+        if (env.containsKey("KS_KEY_PASSWORD")) {
+            setProperty("keyPassword", env["KS_KEY_PASSWORD"])
+        }
+    }
+}
+
 android {
     namespace = "io.github.nicoenhance"
     compileSdk = 36
@@ -17,9 +35,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("keystore/nicoenhance.jks")
-            storePassword = "nicoenhance"
-            keyAlias = "nicoenhance"
-            keyPassword = "nicoenhance"
+            storePassword = keystoreProperties.getProperty("storePassword") ?: System.getenv("KS_STORE_PASSWORD") ?: ""
+            keyAlias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KS_KEY_ALIAS") ?: ""
+            keyPassword = keystoreProperties.getProperty("keyPassword") ?: System.getenv("KS_KEY_PASSWORD") ?: ""
         }
     }
 

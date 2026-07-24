@@ -10,5 +10,11 @@
 local.properties
 /app/build
 /app/release
+/app/keystore/
+*.jks
+*.keystore
+*.apk
+*.apks
+*.zip
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
