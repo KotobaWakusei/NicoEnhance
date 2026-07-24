@@ -3,18 +3,18 @@ plugins {
 }
 
 val keystoreProperties = java.util.Properties().apply {
-    val propsFile = rootProject.file("local.properties")
-    if (propsFile.exists()) {
-        propsFile.inputStream().use { load(it) }
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { stream -> load(stream) }
     } else {
         val env = System.getenv()
-        if (env.containsKey("KS_STORE_PASSWORD")) {
+        if ("KS_STORE_PASSWORD" in env) {
             setProperty("storePassword", env["KS_STORE_PASSWORD"])
         }
-        if (env.containsKey("KS_KEY_ALIAS")) {
+        if ("KS_KEY_ALIAS" in env) {
             setProperty("keyAlias", env["KS_KEY_ALIAS"])
         }
-        if (env.containsKey("KS_KEY_PASSWORD")) {
+        if ("KS_KEY_PASSWORD" in env) {
             setProperty("keyPassword", env["KS_KEY_PASSWORD"])
         }
     }
