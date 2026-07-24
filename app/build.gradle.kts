@@ -2,23 +2,9 @@ plugins {
     id("com.android.application")
 }
 
-val keystoreProperties = java.util.Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) {
-        file.inputStream().use { stream -> load(stream) }
-    } else {
-        val env = System.getenv()
-        if ("KS_STORE_PASSWORD" in env) {
-            setProperty("storePassword", env["KS_STORE_PASSWORD"])
-        }
-        if ("KS_KEY_ALIAS" in env) {
-            setProperty("keyAlias", env["KS_KEY_ALIAS"])
-        }
-        if ("KS_KEY_PASSWORD" in env) {
-            setProperty("keyPassword", env["KS_KEY_PASSWORD"])
-        }
-    }
-}
+val ksStorePassword: String? = System.getenv("KS_STORE_PASSWORD")
+val ksKeyAlias: String?     = System.getenv("KS_KEY_ALIAS")
+val ksKeyPassword: String?  = System.getenv("KS_KEY_PASSWORD")
 
 android {
     namespace = "io.github.nicoenhance"
@@ -35,9 +21,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("keystore/nicoenhance.jks")
-            storePassword = keystoreProperties.getProperty("storePassword") ?: System.getenv("KS_STORE_PASSWORD") ?: ""
-            keyAlias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KS_KEY_ALIAS") ?: ""
-            keyPassword = keystoreProperties.getProperty("keyPassword") ?: System.getenv("KS_KEY_PASSWORD") ?: ""
+            storePassword = ksStorePassword ?: ""
+            keyAlias = ksKeyAlias ?: ""
+            keyPassword = ksKeyPassword ?: ""
         }
     }
 
