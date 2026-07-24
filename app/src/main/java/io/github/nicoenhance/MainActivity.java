@@ -67,13 +67,28 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void checkModuleStatus() {
-        boolean active = isModuleActive();
-        if (active) {
-            moduleStatusText.setText("LSPosed 模块已激活");
+        if (isModuleActive()) {
+            String since = moduleActiveLastSeen();
+            moduleStatusText.setText(since == null
+                    ? "LSPosed 模块已激活"
+                    : "LSPosed 模块已激活\n上次注入时间：" + since);
             moduleStatusCard.setCardBackgroundColor(getColor(R.color.card_background));
         } else {
             moduleStatusText.setText("LSPosed 模块未激活\n请在 LSPosed 中勾选 niconico 并重启手机");
             moduleStatusCard.setCardBackgroundColor(getColor(R.color.card_background));
+        }
+    }
+
+    private String moduleActiveLastSeen() {
+        try {
+            String value = android.provider.Settings.System.getString(
+                    getContentResolver(), "nicoenhance_module_active_ts");
+            if (value == null || value.isEmpty()) return null;
+            long ts = Long.parseLong(value);
+            return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+                    .format(new java.util.Date(ts));
+        } catch (Throwable t) {
+            return null;
         }
     }
 
@@ -151,12 +166,68 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public boolean isModuleActive() {
-        return isSelfHooked()
-                || new java.io.File(getFilesDir(), ".module_active").exists()
-                || new java.io.File("/data/data/" + getPackageName() + "/files/.module_active").exists();
+        if (isSelfHooked()) return true;
+        if (lsposedMarkerExists()) return true;
+        if (rootLspDirExists()) return true;
+        if (moduleActiveSentinelExists()) return true;
+        if (moduleActiveMarkerFileExists()) return true;
+        return false;
     }
 
-    public static boolean isSelfHooked() {
-        return false;
+    /**
+     * Best signal: if any LSPosed-related shared library mapped into this process, the
+     * niconico process is hosted by LSPosed and our hooks ran. We probe by name rather than
+     * version because the runtime library name changes between LSPosed variants.
+     */
+    public boolean isSelfHooked() {
+        try {
+            java.io.InputStream maps = new java.io.FileInputStream("/proc/self/maps");
+            byte[] buf = new byte[8192];
+            int n;
+            StringBuilder sb = new StringBuilder();
+            while ((n = maps.read(buf)) > 0) sb.append(new String(buf, 0, n));
+            maps.close();
+            String content = sb.toString();
+            return content.contains("libxposed")
+                    || content.contains("lspd")
+                    || content.contains("lsposed");
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private boolean lsposedMarkerExists() {
+        String sandbox = android.os.Environment.getDataDirectory().getAbsolutePath();
+        java.io.File f = new java.io.File(sandbox + "/adrive/lspd/module_enabled");
+        return f.exists();
+    }
+
+    private boolean rootLspDirExists() {
+        return new java.io.File("/data/adb/lspd").exists()
+                || new java.io.File("/data/adb/lsp/modules").exists()
+                || new java.io.File("/data/user_de/0/org.lsposed.manager").exists();
+    }
+
+    /**
+     * Cross-process sentinel written by NicoEnhance after each niconico launch under LSPosed.
+     * Stored in {@link android.provider.Settings.System} so it survives reboots and is visible
+     * to this MainActivity without permissions.
+     */
+    private boolean moduleActiveSentinelExists() {
+        try {
+            long cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000;
+            String value = android.provider.Settings.System.getString(
+                    getContentResolver(), "nicoenhance_module_active_ts");
+            if (value == null || value.isEmpty()) return false;
+            long ts = Long.parseLong(value);
+            return ts >= cutoff;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private boolean moduleActiveMarkerFileExists() {
+        return new java.io.File(getFilesDir(), ".module_active").exists()
+                || new java.io.File("/data/data/" + getPackageName() + "/files/.module_active").exists();
     }
 }

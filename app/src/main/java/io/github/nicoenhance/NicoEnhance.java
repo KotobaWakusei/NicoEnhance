@@ -46,6 +46,16 @@ import io.github.libxposed.api.XposedModule;
 
 public class NicoEnhance extends XposedModule {
 
+    /**
+     * Settings.Secure key used as a process-global "ModuleActive" sentinel.
+     * Written from the niconico process by {@link #writeModuleActiveSentinel(long)} after the
+     * module finishes installing its hooks; read by {@link MainActivity#isModuleActive()}.
+     * Chosen because Settings.Secure is writable from any app process on Android <12 without
+     * signature permissions, narrow collision (just a uint64 timestamp string), and survives
+     * process / module restarts.
+     */
+    static final String SETTINGS_SENTINEL_KEY = "nicoenhance_module_active_ts";
+
     private static final String TAG = "NicoEnhance";
     private static final String TARGET = "jp.nicovideo.android";
     private static final String MODULE = "io.github.nicoenhance";
@@ -153,6 +163,7 @@ public class NicoEnhance extends XposedModule {
             hook(isSelfHooked)
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> true);
+            writeSelfCheckFlag();
             log(Log.INFO, TAG, "Self-hook installed: isSelfHooked() -> true");
         } catch (Throwable t) {
             log(Log.WARN, TAG, "Self-hook failed, falling back to file check", t);
@@ -217,6 +228,32 @@ public class NicoEnhance extends XposedModule {
             } catch (Throwable t) {
                 log(Log.ERROR, TAG, "Failed to install app hooks", t);
             }
+        }
+        writeSelfCheckFlag();
+        writeModuleActiveSentinel();
+    }
+
+    /**
+     * After all hooks installed, drop a sentinel where {@link MainActivity} can reach it.
+     * Strictly speaking only LSPosed-framework libraries can validate this hook actually ran,
+     * but a public {@link android.provider.Settings.System} slot is enough to detect "module
+     * has been processed at least once" without root or extra permissions and survives
+     * process death. Writing always succeeds regardless of hooking outcome so the UI at least
+     * tells the user to relaunch niconico for a self-hook to land.
+     */
+    private void writeModuleActiveSentinel() {
+        try {
+            Class<?> activityThread = Class.forName("android.app.ActivityThread");
+            Method currentApplication = activityThread.getMethod("currentApplication");
+            Object app = currentApplication.invoke(null);
+            if (!(app instanceof Context)) return;
+            Context ctx = (Context) app;
+            android.content.ContentResolver cr = ctx.getContentResolver();
+            android.provider.Settings.System.putString(cr, SETTINGS_SENTINEL_KEY,
+                    Long.toString(System.currentTimeMillis()));
+            log(Log.INFO, TAG, "Module-active sentinel written to " + SETTINGS_SENTINEL_KEY);
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "Failed to write module-active sentinel", t);
         }
     }
 
