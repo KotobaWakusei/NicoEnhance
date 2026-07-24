@@ -10,8 +10,8 @@ android {
         applicationId = "io.github.nicoenhance"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.0"
+        versionCode = 5
+        versionName = "1.0.3"
     }
 
     signingConfigs {
