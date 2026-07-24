@@ -58,9 +58,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -e
+          APK=app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "APK not found at $APK"; exit 1
+          fi
+          if gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release ${{ github.ref_name }} already exists, deleting and recreating"
+            gh release delete "${{ github.ref_name }}" --repo "${{ github.repository }}" --yes --cleanup-tag
+            git tag -d "${{ github.ref_name }}" || true
+          fi
           gh release create "${{ github.ref_name }}" \
             --repo "${{ github.repository }}" \
             --title "${{ github.ref_name }}" \
             --generate-notes \
-            --clobber \
-            app/build/outputs/apk/release/app-release.apk
+            "$APK"
