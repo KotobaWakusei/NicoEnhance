@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.ContextWrapper;
+import android.content.Intent;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Color;
@@ -34,6 +35,7 @@ import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -61,24 +63,76 @@ public class NicoEnhance extends XposedModule {
     private static final String ABOUT_APP_JA = "\u3053\u306e\u30a2\u30d7\u30ea\u306b\u3064\u3044\u3066";
     private static final String ABOUT_APP_ZH = "\u5173\u4e8e\u672c\u5e94\u7528";
     private static final String CONFIG_DIALOG_TITLE = "NicoEnhance";
+    private static final String CONFIG_GROUP_TRANSLATION = "\u7ffb \u8bd1";
+    private static final String CONFIG_GROUP_AD = "\u5e7f \u544a";
+    private static final String CONFIG_GROUP_PREMIUM = "\u4f1a \u5458";
+    private static final String CONFIG_GROUP_DEBUG = "\u8c03 \u8bd5";
     private static final String CONFIG_TRANSLATION_ENABLED = "\u542f\u7528\u7ffb\u8bd1\u4e0e\u589e\u5f3a";
-    private static final String CONFIG_RUNTIME_TRANSLATION_ENABLED = "\u7ffb\u8bd1\u5e94\u7528\u6587\u672c";
-    private static final String CONFIG_WEBVIEW_TRANSLATION_ENABLED = "\u7ffb\u8bd1 WebView \u5185\u5bb9";
-    private static final String CONFIG_AD_REMOVAL_ENABLED = "\u53bb\u9664\u5e7f\u544a";
-    private static final String CONFIG_DEBUG_LOG_ENABLED = "\u8c03\u8bd5\u65e5\u5fd7";
-    private static final String CONFIG_PREMIUM_UNLOCK = "\u89e3\u9501\u4f1a\u5458\u7279\u6743";
+    private static final String CONFIG_RUNTIME_TRANSLATION_TITLE = "\u7ffb\u8bd1\u5e94\u7528\u6587\u672c";
+    private static final String CONFIG_RUNTIME_TRANSLATION_SUMMARY =
+            "\u5c06\u63a5\u53e3\u3001\u8bbe\u7f6e\u9875\u4e2d\u7684\u65e5\u6587\u7ffb\u8bd1\u4e3a\u7b80\u4f53\u4e2d\u6587\u3002";
+    private static final String CONFIG_WEBVIEW_TRANSLATION_TITLE = "\u7ffb\u8bd1 WebView \u5185\u5bb9";
+    private static final String CONFIG_WEBVIEW_TRANSLATION_SUMMARY =
+            "\u7ffb\u8bd1\u7248\u6743\u9875\u4e0e\u8d5e\u52a9\u8005\u6e32\u67d3\u5668\u5185\u5bb9\u3002";
+    private static final String CONFIG_AD_REMOVAL_TITLE = "\u53bb\u9664\u5e7f\u544a";
+    private static final String CONFIG_AD_REMOVAL_SUMMARY =
+            "\u9690\u85cf\u5e94\u7528\u5185\u5e7f\u544a\u4e0e\u89c6\u9891\u524d\u8d34\u7247\u5e7f\u544a\u3002";
+    private static final String CONFIG_DEBUG_LOG_TITLE = "\u8c03\u8bd5\u65e5\u5fd7";
+    private static final String CONFIG_DEBUG_LOG_SUMMARY =
+            "\u8f93\u51fa\u8be6\u7ec6\u7684\u8c03\u8bd5\u4fe1\u606f\uff0c\u6b63\u5e38\u4f7f\u7528\u65f6\u5173\u95ed\u3002";
+    private static final String CONFIG_PREMIUM_UNLOCK_TITLE = "\u89e3\u9501\u4f1a\u5458\u7279\u6743";
+    private static final String CONFIG_PREMIUM_UNLOCK_SUMMARY =
+            "\u8d85\u8d8a\u4f1a\u5458\u80fd\u529b\u68c0\u67e5\uff0c\u542f\u7528\u540e\u754c\u9762\u4e0a\u4f1a\u5458\u72ec\u4eab\u9879\u4e5f\u53ef\u7528\u3002";
     private static final String CONFIG_SAVE = "\u4fdd\u5b58";
     private static final String CONFIG_CANCEL = "\u53d6\u6d88";
     private static final String CONFIG_SAVED = "\u5df2\u4fdd\u5b58\uff0c\u90e8\u5206\u9875\u9762\u9700\u91cd\u65b0\u8fdb\u5165\u6216\u91cd\u542f niconico";
 
     private static final int MAX_VIEW_DEPTH = 50;
 
+    /**
+     * Package-name prefixes for third-party ad SDKs that niconico bundles. Any
+     * {@link android.content.Intent} resolved against a class inside these packages is a
+     * pure-play ad landing and is suppressed before niconico even starts the target Activity.
+     * Ad SDKs that bundle their own Activity hosts are matched by {@code startsWith}; SDKs
+     * delivered as plain UIs in a different package can be added here at runtime by appending
+     * a list edit in {@link #installAdActivityBlockHook()}.
+     */
+    private static final String[] AD_SDK_PACKAGE_PREFIXES = new String[]{
+            "com.bytedance.", "com.pangle.", "com.bykv.",
+            "jp.fluct.",     "com.fluct.",
+            "com.five_corp.", "com.five.",
+            "com.pubmatic.",  "com.pob.", "com.openwrap.",
+            "com.inmobi.",
+            "com.google.android.gms.ads.",
+            "com.google.android.ads.",
+            "com.millennialmedia.",
+            "com.mopub.",       "com.mopub.mobileads.",
+            "com.ironsource.",  "com.supersonic.",
+            "com.applovin.",    "com.applvn.",
+            "com.facebook.",    "com.facebook.ads.",
+            "com.unity3d.",     "com.unity3d.ads.",
+            "com.taboola.",     "com.outbrain.",
+            "com.chartbeat.",
+            "com.vungle.",      "com.vungela.",
+            "com.amazon.ads.",
+            "com.startapp.",
+            "com.tapjoy.",
+            "com.smaato.",
+            "com.yahoo.",       "com.yahoo.mobileads.",
+            "com.yandex.",
+            "com.baidu.",       "com.baidu.mobads.",
+            "com.tencent.",     "com.tencent.gdt.",
+            "com.alipay.",
+            "com.kwad."
+    };
+
+    private static volatile boolean adActivityBlockHookInstalled;
+
     private TranslationRepository repo;
     private final ModuleConfig config = new ModuleConfig();
     private final AtomicBoolean resourceHooksInstalled = new AtomicBoolean();
     private boolean appHooksInstalled;
     private WeakReference<Activity> currentActivity = new WeakReference<>(null);
-
     @Override
     public void onPackageLoaded(PackageLoadedParam param) {
         String pkg = param.getPackageName();
@@ -152,15 +206,17 @@ public class NicoEnhance extends XposedModule {
     private void installAppHooks(ClassLoader classLoader) {
         if (appHooksInstalled) return;
         appHooksInstalled = true;
-        try {
-            hookNicoSettingsEntry(classLoader);
-            hookAboutAppComposeEntry(classLoader);
-            hookAdRemoval(classLoader);
-            hookComposeTextMethods(classLoader);
-            hookPreferenceMethods(classLoader);
-            hookPremiumUnlock(classLoader);
-        } catch (Throwable t) {
-            log(Log.ERROR, TAG, "Failed to install app hooks", t);
+        try (ClassNameProvider provider = ClassNameProvider.open(classLoader)) {
+            try {
+                hookNicoSettingsEntry(classLoader, provider);
+                hookAboutAppComposeEntry(classLoader, provider);
+                hookAdRemoval(classLoader, provider);
+                hookComposeTextMethods(classLoader);
+                hookPreferenceMethods(classLoader);
+                hookPremiumUnlock(classLoader, provider);
+            } catch (Throwable t) {
+                log(Log.ERROR, TAG, "Failed to install app hooks", t);
+            }
         }
     }
 
@@ -347,6 +403,63 @@ public class NicoEnhance extends XposedModule {
                 if (w != null) translateViewTree(w.getDecorView());
                 return r;
             });
+        installAdActivityBlockHook();
+    }
+
+    /**
+     * Block {@link Activity#startActivity} calls that target a bundled ad-SDK Activity.
+     * Catches the long tail of ad-network entry points not covered by the per-view
+     * removal hooks. Best-effort: reflection-induced launches may still slip through,
+     * but the visible ads from ByteDance / Fluct / Five / PubMatic / InMobi / Google Ads
+     * are routed through these SDK Activity hosts and are blocked here.
+     */
+    private void installAdActivityBlockHook() {
+        if (adActivityBlockHookInstalled) return;
+        synchronized (NicoEnhance.class) {
+            if (adActivityBlockHookInstalled) return;
+            try {
+                Method m = Activity.class.getDeclaredMethod("startActivity", Intent.class);
+                m.setAccessible(true);
+                final NicoEnhance self = this;
+                hook(m).setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                        .intercept(chain -> {
+                            Intent intent = (Intent) chain.getArg(0);
+                            if (intent == null) return chain.proceed();
+                            Activity active = self.currentActivity.get();
+                            if (active != null) {
+                                self.config.refresh(active);
+                            } else {
+                                self.ensureConfigLoaded();
+                            }
+                            if (!self.config.isAdRemovalEnabled()) return chain.proceed();
+                            if (!isAdSdkTarget(intent)) return chain.proceed();
+                            return null;
+                        });
+                adActivityBlockHookInstalled = true;
+                log(Log.INFO, TAG, "Ad-SDK Activity start hook installed");
+            } catch (Throwable t) {
+                log(Log.WARN, TAG, "Failed to install ad-SDK Activity start hook", t);
+            }
+        }
+    }
+
+    private static boolean isAdSdkTarget(Intent intent) {
+        String pkg = intent.getPackage();
+        if (pkg != null) {
+            for (String prefix : AD_SDK_PACKAGE_PREFIXES) {
+                if (pkg.startsWith(prefix)) return true;
+            }
+        }
+        android.content.ComponentName comp = intent.getComponent();
+        if (comp != null) {
+            String flat = comp.getClassName();
+            if (flat != null) {
+                for (String prefix : AD_SDK_PACKAGE_PREFIXES) {
+                    if (flat.startsWith(prefix)) return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void hookToastMethods() throws NoSuchMethodException {
@@ -440,8 +553,8 @@ public class NicoEnhance extends XposedModule {
 
     // ── Settings injection ──
 
-    private void hookNicoSettingsEntry(ClassLoader classLoader) {
-        Class<?> fragmentClass = findSettingFragmentClass(classLoader);
+    private void hookNicoSettingsEntry(ClassLoader classLoader, ClassNameProvider provider) {
+        Class<?> fragmentClass = findSettingFragmentClass(classLoader, provider);
         if (fragmentClass == null) {
             log(Log.WARN, TAG, "SettingFragment not found; settings entry skipped");
             return;
@@ -466,24 +579,17 @@ public class NicoEnhance extends XposedModule {
         log(Log.INFO, TAG, "Settings entry hook installed: " + fragmentClass.getName());
     }
 
-    private Class<?> findSettingFragmentClass(ClassLoader classLoader) {
-        try {
-            return Class.forName(SETTINGS_FRAGMENT_CLASS, false, classLoader);
-        } catch (ClassNotFoundException ignored) {}
-
-        try (DexKitLocator locator = DexKitLocator.fromClassLoader(classLoader)) {
-            if (!locator.isValid()) return null;
-            String[][] fingerprints = {
-                    {"\u8a2d\u5b9a"}, {"\u30a2\u30ab\u30a6\u30f3\u30c8"}, {"\u30d8\u30eb\u30d7"}, {"setting"}
-            };
-            for (String[] fp : fingerprints) {
-                Class<?> c = chooseSettingFragmentCandidate(locator.findClassesUsingStrings(fp));
-                if (c != null) return c;
-            }
-        } catch (Throwable t) {
-            log(Log.WARN, TAG, "DexKit failed to locate SettingFragment", t);
-        }
+    private Class<?> findSettingFragmentClass(ClassLoader classLoader, ClassNameProvider provider) {
+        Class<?> resolved = provider.get(SETTINGS_FRAGMENT_CLASS,
+                "\u8a2d\u5b9a", "\u30a2\u30ab\u30a6\u30f3\u30c8", "\u30d8\u30eb\u30d7", "setting");
+        if (resolved != null) return chooseSettingFragmentCandidate(directClassesIncluding(resolved));
         return null;
+    }
+
+    private List<Class<?>> directClassesIncluding(Class<?> c) {
+        List<Class<?>> out = new ArrayList<>();
+        out.add(c);
+        return out;
     }
 
     private Class<?> chooseSettingFragmentCandidate(List<Class<?>> candidates) {
@@ -514,19 +620,31 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private void hookAboutAppComposeEntry(ClassLoader classLoader) {
+    private void hookAboutAppComposeEntry(ClassLoader classLoader, ClassNameProvider provider) {
         try {
-            Class<?> settingComponents = Class.forName("hp.e0", false, classLoader);
-            Class<?> function0 = Class.forName("qr.a", false, classLoader);
-            Class<?> composer = Class.forName("androidx.compose.runtime.Composer", false, classLoader);
+            Class<?> function0 = provider.get("qr.a");
+            Class<?> composer = provider.get("androidx.compose.runtime.Composer");
+            if (function0 == null || composer == null) {
+                log(Log.WARN, TAG, "Compose settings entry skipped: kotlin/composer classes unavailable");
+                return;
+            }
+            Class<?> settingComponents = provider.get("hp.e0", "\u8a2d\u5b9a");
+            if (settingComponents == null) {
+                log(Log.WARN, TAG, "Compose settings entry skipped: hp.e0 not found");
+                return;
+            }
             Method settingTextItemByRes = settingComponents.getDeclaredMethod(
                     "k", int.class, function0, composer, int.class, int.class);
             Method settingTextItemByText = settingComponents.getDeclaredMethod(
                     "l", String.class, function0, composer, int.class, int.class);
             settingTextItemByRes.setAccessible(true);
             settingTextItemByText.setAccessible(true);
-            int aboutAppTitleRes = Class.forName("mf.l0", false, classLoader)
-                    .getField("config_application_info").getInt(null);
+            Class<?> mfL0 = provider.get("mf.l0", "config_application_info");
+            if (mfL0 == null) {
+                log(Log.WARN, TAG, "Compose settings entry skipped: mf.l0 not found");
+                return;
+            }
+            int aboutAppTitleRes = mfL0.getField("config_application_info").getInt(null);
             Object nauxClick = createNauxiliaryClickCallback(function0, classLoader);
             hook(settingTextItemByRes)
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
@@ -539,7 +657,7 @@ public class NicoEnhance extends XposedModule {
                         }
                         return result;
                     });
-            log(Log.INFO, TAG, "Compose settings entry hook installed on hp.e0.k");
+            log(Log.INFO, TAG, "Compose settings entry hook installed on " + settingComponents.getName());
         } catch (Throwable t) {
             log(Log.WARN, TAG, "Failed to hook Compose settings entry", t);
         }
@@ -579,14 +697,15 @@ public class NicoEnhance extends XposedModule {
     private void attachSettingsButtonToTitleBar(View root, int attempt) {
         Context ctx = root.getContext();
         if (ctx == null) return;
+        if (findTaggedView(root, SETTINGS_BUTTON_TAG) != null) return;
         Activity activity = findActivity(ctx);
         View decor = activity != null ? activity.getWindow().getDecorView() : root;
+        if (findTaggedView(decor, SETTINGS_BUTTON_TAG) != null) return;
         ViewGroup titleBar = findSettingsTitleContainer(decor);
         if (titleBar == null) titleBar = findSettingsTitleContainer(root);
         if (titleBar == null) titleBar = findTitleBar(root);
         if (titleBar == null) titleBar = findTitleBar(decor);
         if (titleBar != null) {
-            if (findTaggedView(decor, SETTINGS_BUTTON_TAG) != null) return;
             View button = createSettingsEntryButton(ctx);
             button.setTag(SETTINGS_BUTTON_TAG);
             addButtonToTitleBar(titleBar, button);
@@ -915,62 +1034,143 @@ public class NicoEnhance extends XposedModule {
 
     // ── Config dialog ──
 
+    /**
+     * Backing state for a single configuration row. The dialog builds the matching view from
+     * values rather than reading state straight out of {@link ModuleConfig} so the entries can
+     * be reordered, grouped, or hidden without touching {@link #showConfigDialog}.
+     */
+    private static final class ConfigRow {
+        final String title;
+        final String summary;
+        final boolean initial;
+        boolean current;
+
+        ConfigRow(String title, String summary, boolean initial) {
+            this.title = title;
+            this.summary = summary;
+            this.initial = initial;
+            this.current = initial;
+        }
+    }
+
     private void showConfigDialog(Context context) {
         config.refresh(context);
+        LinkedHashMap<String, ArrayList<ConfigRow>> groups = new LinkedHashMap<>();
+        groups.put(CONFIG_GROUP_TRANSLATION, new ArrayList<>(java.util.Arrays.asList(
+                new ConfigRow(CONFIG_RUNTIME_TRANSLATION_TITLE, CONFIG_RUNTIME_TRANSLATION_SUMMARY,
+                        config.isRuntimeTextTranslationSwitchEnabled()),
+                new ConfigRow(CONFIG_WEBVIEW_TRANSLATION_TITLE, CONFIG_WEBVIEW_TRANSLATION_SUMMARY,
+                        config.isWebViewTranslationSwitchEnabled())
+        )));
+        groups.put(CONFIG_GROUP_AD, new ArrayList<>(java.util.Arrays.asList(
+                new ConfigRow(CONFIG_AD_REMOVAL_TITLE, CONFIG_AD_REMOVAL_SUMMARY,
+                        config.isAdRemovalEnabled())
+        )));
+        groups.put(CONFIG_GROUP_PREMIUM, new ArrayList<>(java.util.Arrays.asList(
+                new ConfigRow(CONFIG_PREMIUM_UNLOCK_TITLE, CONFIG_PREMIUM_UNLOCK_SUMMARY,
+                        config.isPremiumUnlockEnabled())
+        )));
+        groups.put(CONFIG_GROUP_DEBUG, new ArrayList<>(java.util.Arrays.asList(
+                new ConfigRow(CONFIG_DEBUG_LOG_TITLE, CONFIG_DEBUG_LOG_SUMMARY,
+                        config.isDebugLogEnabled())
+        )));
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(context);
+        scroll.setFillViewport(true);
         LinearLayout content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(context, 20), dp(context, 8), dp(context, 20), 0);
+        scroll.addView(content, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        Switch translationSwitch = createConfigSwitch(context, CONFIG_TRANSLATION_ENABLED, config.isTranslationEnabled());
-        Switch runtimeSwitch = createConfigSwitch(context, CONFIG_RUNTIME_TRANSLATION_ENABLED, config.isRuntimeTextTranslationSwitchEnabled());
-        Switch webViewSwitch = createConfigSwitch(context, CONFIG_WEBVIEW_TRANSLATION_ENABLED, config.isWebViewTranslationSwitchEnabled());
-        Switch adRemovalSwitch = createConfigSwitch(context, CONFIG_AD_REMOVAL_ENABLED, config.isAdRemovalEnabled());
-        Switch debugSwitch = createConfigSwitch(context, CONFIG_DEBUG_LOG_ENABLED, config.isDebugLogEnabled());
-        Switch premiumSwitch = createConfigSwitch(context, CONFIG_PREMIUM_UNLOCK, config.isPremiumUnlockEnabled());
+        for (Map.Entry<String, ArrayList<ConfigRow>> entry : groups.entrySet()) {
+            TextView groupTitle = new TextView(context);
+            groupTitle.setText(entry.getKey());
+            groupTitle.setTextSize(13);
+            groupTitle.setTextColor(resolveColor(context, android.R.attr.textColorSecondary, 0xFF888888));
+            groupTitle.setPadding(dp(context, 8), dp(context, 12), dp(context, 8), dp(context, 6));
+            content.addView(groupTitle);
 
-        content.addView(translationSwitch);
-        content.addView(runtimeSwitch);
-        content.addView(webViewSwitch);
-        content.addView(adRemovalSwitch);
-        content.addView(debugSwitch);
-        content.addView(premiumSwitch);
+            for (ConfigRow row : entry.getValue()) {
+                content.addView(createConfigRow(context, row));
+            }
+        }
 
         new AlertDialog.Builder(context)
                 .setTitle(CONFIG_DIALOG_TITLE)
-                .setView(content)
+                .setView(scroll)
                 .setNegativeButton(CONFIG_CANCEL, null)
                 .setPositiveButton(CONFIG_SAVE, (dialog, which) -> {
                     config.save(context,
-                            translationSwitch.isChecked(),
-                            runtimeSwitch.isChecked(),
-                            webViewSwitch.isChecked(),
-                            adRemovalSwitch.isChecked(),
-                            debugSwitch.isChecked(),
-                            premiumSwitch.isChecked());
+                            true,
+                            rowsValueOr(groups.get(CONFIG_GROUP_TRANSLATION), 0, true),
+                            rowsValueOr(groups.get(CONFIG_GROUP_TRANSLATION), 1, true),
+                            rowsValueOr(groups.get(CONFIG_GROUP_AD), 0, true),
+                            rowsValueOr(groups.get(CONFIG_GROUP_DEBUG), 0, false),
+                            rowsValueOr(groups.get(CONFIG_GROUP_PREMIUM), 0, true));
                     Toast.makeText(context, CONFIG_SAVED, Toast.LENGTH_LONG).show();
                 })
                 .show();
     }
 
-    private Switch createConfigSwitch(Context context, String text, boolean checked) {
+    private boolean rowsValueOr(ArrayList<ConfigRow> rows, int index, boolean fallback) {
+        if (rows == null || index >= rows.size()) return fallback;
+        return rows.get(index).current;
+    }
+
+    private View createConfigRow(Context context, ConfigRow row) {
+        LinearLayout container = new LinearLayout(context);
+        container.setOrientation(LinearLayout.HORIZONTAL);
+        container.setGravity(Gravity.CENTER_VERTICAL);
+        container.setPadding(dp(context, 12), dp(context, 10), dp(context, 8), dp(context, 10));
+        container.setMinimumHeight(dp(context, 48));
+        container.setClickable(true);
+        container.setFocusable(true);
+        Drawable bg = resolveDrawable(context, android.R.attr.selectableItemBackground);
+        if (bg != null) container.setBackground(bg);
+
+        LinearLayout labels = new LinearLayout(context);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView title = new TextView(context);
+        title.setText(row.title);
+        title.setTextSize(15);
+        title.setTextColor(resolveColor(context, android.R.attr.textColorPrimary, 0xFF222222));
+        title.setSingleLine(true);
+        labels.addView(title);
+
+        if (row.summary != null) {
+            TextView summary = new TextView(context);
+            summary.setText(row.summary);
+            summary.setTextSize(12);
+            summary.setTextColor(resolveColor(context, android.R.attr.textColorSecondary, 0xFF888888));
+            summary.setSingleLine(false);
+            summary.setMaxLines(2);
+            summary.setPadding(0, dp(context, 2), 0, 0);
+            labels.addView(summary);
+        }
+        container.addView(labels);
+
         Switch s = new Switch(context);
-        s.setText(text);
-        s.setTextSize(15);
-        s.setChecked(checked);
-        s.setPadding(0, dp(context, 8), 0, dp(context, 8));
-        return s;
+        s.setChecked(row.current);
+        s.setOnCheckedChangeListener((btn, checked) -> row.current = checked);
+        container.addView(s);
+
+        container.setOnClickListener(v -> s.toggle());
+        return container;
     }
 
     // ── Ad removal ──
 
-    private void hookAdRemoval(ClassLoader classLoader) {
+    private void hookAdRemoval(ClassLoader classLoader, ClassNameProvider provider) {
         int count = 0;
-        count += hookInAppAdFactory(classLoader);
-        count += hookInAppAdController(classLoader);
-        count += hookInAppAdViewClass(classLoader, "jp.nicovideo.android.ui.inappad.InAppAdMobView");
-        count += hookInAppAdViewClass(classLoader, "jp.nicovideo.android.ui.inappad.InAppAdGenerationView");
-        count += hookComposeAdBanner(classLoader);
-        count += hookPlayerVideoAdView(classLoader);
+        count += hookInAppAdFactory(classLoader, provider);
+        count += hookInAppAdController(classLoader, provider);
+        count += hookInAppAdViewClass(classLoader, provider, "jp.nicovideo.android.ui.inappad.InAppAdMobView");
+        count += hookInAppAdViewClass(classLoader, provider, "jp.nicovideo.android.ui.inappad.InAppAdGenerationView");
+        count += hookComposeAdBanner(classLoader, provider);
+        count += hookPlayerVideoAdView(classLoader, provider);
         if (count > 0) {
             log(Log.INFO, TAG, "Ad removal hooks installed: " + count);
         } else {
@@ -978,23 +1178,24 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookInAppAdFactory(ClassLoader classLoader) {
+    private int hookInAppAdFactory(ClassLoader classLoader, ClassNameProvider provider) {
         int count = 0;
-        try {
-            Class<?> factoryClass = Class.forName("ul.i", false, classLoader);
+        Class<?> factoryClass = provider.get("ul.i", "oxInAppAd");
+        if (factoryClass != null) {
             count += hookInAppAdFactoryMethods(factoryClass, "known");
-        } catch (ClassNotFoundException ignored) {}
-        if (count == 0) count += hookInAppAdFactoryWithDexKit(classLoader);
+        }
+        if (count == 0 && provider.bridgeReady()) {
+            count += hookInAppAdFactoryWithDexKit(classLoader, provider);
+        }
         return count;
     }
 
-    private int hookInAppAdFactoryWithDexKit(ClassLoader classLoader) {
+    private int hookInAppAdFactoryWithDexKit(ClassLoader classLoader, ClassNameProvider provider) {
         int count = 0;
         List<Method> candidates = new ArrayList<>();
-        try (DexKitLocator locator = DexKitLocator.fromClassLoader(classLoader)) {
-            if (!locator.isValid()) return 0;
-            addMethods(candidates, locator.findMethodsUsingStrings("adUnitId", "baseFrameSizeDp"));
-            addMethods(candidates, locator.findMethodsUsingStrings("oxInAppAd"));
+        try {
+            addMethods(candidates, provider.findMethodsUsingStrings("adUnitId", "baseFrameSizeDp"));
+            addMethods(candidates, provider.findMethodsUsingStrings("oxInAppAd"));
             for (Method m : candidates) {
                 if (isInAppAdFactoryMethod(m)) count += hookInAppAdFactoryMethod(m, "dexkit");
             }
@@ -1040,17 +1241,15 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookInAppAdController(ClassLoader classLoader) {
-        try {
-            Class<?> ctrlClass = Class.forName("uf.g", false, classLoader);
-            int count = 0;
-            count += hookAdControllerMethod(ctrlClass, "h");
-            count += hookAdControllerMethod(ctrlClass, "j");
-            count += hookAdControllerMethod(ctrlClass, "k");
-            count += hookAdControllerMethod(ctrlClass, "m");
-            return count;
-        } catch (ClassNotFoundException e) { return 0; }
-        catch (Throwable t) { log(Log.WARN, TAG, "Failed to hook in-app ad controller", t); return 0; }
+    private int hookInAppAdController(ClassLoader classLoader, ClassNameProvider provider) {
+        Class<?> ctrlClass = provider.get("uf.g", "adUnitId");
+        if (ctrlClass == null) return 0;
+        int count = 0;
+        count += hookAdControllerMethod(ctrlClass, "h");
+        count += hookAdControllerMethod(ctrlClass, "j");
+        count += hookAdControllerMethod(ctrlClass, "k");
+        count += hookAdControllerMethod(ctrlClass, "m");
+        return count;
     }
 
     private int hookAdControllerMethod(Class<?> ctrlClass, String methodName) {
@@ -1072,15 +1271,18 @@ public class NicoEnhance extends XposedModule {
         return count;
     }
 
-    private int hookInAppAdViewClass(ClassLoader classLoader, String className) {
+    private int hookInAppAdViewClass(ClassLoader classLoader, ClassNameProvider provider, String className) {
+        Class<?> adViewClass = provider.get(className);
+        if (adViewClass == null) return 0;
         try {
-            Class<?> adViewClass = Class.forName(className, false, classLoader);
             int count = 0;
             count += hookAdViewNoArgMethod(adViewClass, "start");
             count += hookAdViewNoArgMethod(adViewClass, "a");
             return count;
-        } catch (ClassNotFoundException e) { return 0; }
-        catch (Throwable t) { log(Log.WARN, TAG, "Failed to hook ad view: " + className, t); return 0; }
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "Failed to hook ad view: " + className, t);
+            return 0;
+        }
     }
 
     private int hookAdViewNoArgMethod(Class<?> adViewClass, String methodName) {
@@ -1099,40 +1301,28 @@ public class NicoEnhance extends XposedModule {
         catch (Throwable t) { log(Log.WARN, TAG, "Failed to hook ad view method", t); return 0; }
     }
 
-    private int hookComposeAdBanner(ClassLoader classLoader) {
-        int count = hookKnownComposeAdBanner(classLoader);
-        if (count == 0) count += hookComposeAdBannerWithDexKit(classLoader);
+    private int hookComposeAdBanner(ClassLoader classLoader, ClassNameProvider provider) {
+        int count = hookKnownComposeAdBanner(classLoader, provider);
         return count;
     }
 
-    private int hookKnownComposeAdBanner(ClassLoader classLoader) {
+    private int hookKnownComposeAdBanner(ClassLoader classLoader, ClassNameProvider provider) {
+        Class<?> containerClass = provider.get("jk.c", "AdBannerContainer");
+        if (containerClass == null) return 0;
         try {
-            Class<?> containerClass = Class.forName("jk.c", false, classLoader);
             int count = 0;
             for (Method m : containerClass.getDeclaredMethods()) {
-                if (isComposeAdBannerMethod(m)) count += hookComposeAdBannerMethod(m, "known");
+                if (isComposableFunction(m)) count += hookComposeAdBannerMethod(m, "known");
             }
             return count;
-        } catch (ClassNotFoundException e) { return 0; }
-        catch (Throwable t) { log(Log.WARN, TAG, "Failed to hook known Compose ad banner", t); return 0; }
-    }
-
-    private int hookComposeAdBannerWithDexKit(ClassLoader classLoader) {
-        int count = 0;
-        try (DexKitLocator locator = DexKitLocator.fromClassLoader(classLoader)) {
-            if (!locator.isValid()) return 0;
-            for (Method m : locator.findMethodsUsingStrings(
-                    "jp.nicovideo.android.ui.base.compose.container.AdBannerContainer (AdBannerContainer.kt:33)")) {
-                if (isComposeAdBannerMethod(m)) count += hookComposeAdBannerMethod(m, "dexkit");
-            }
         } catch (Throwable t) {
-            log(Log.WARN, TAG, "DexKit Compose ad banner search failed", t);
+            log(Log.WARN, TAG, "Failed to hook known Compose ad banner", t);
+            return 0;
         }
-        return count;
     }
 
-    private boolean isComposeAdBannerMethod(Method m) {
-        if (m.getReturnType() != Void.TYPE) return false;
+    private boolean isComposableFunction(Method m) {
+        if (m == null || m.getReturnType() != Void.TYPE) return false;
         for (Class<?> pt : m.getParameterTypes()) {
             if ("androidx.compose.runtime.Composer".equals(pt.getName())) return true;
         }
@@ -1159,10 +1349,10 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookPlayerVideoAdView(ClassLoader classLoader) {
+    private int hookPlayerVideoAdView(ClassLoader classLoader, ClassNameProvider provider) {
+        Class<?> playerAdClass = provider.get("jp.nicovideo.android.ui.player.panel.PlayerVideoAdvertisementView");
+        if (playerAdClass == null) return 0;
         try {
-            Class<?> playerAdClass = Class.forName(
-                    "jp.nicovideo.android.ui.player.panel.PlayerVideoAdvertisementView", false, classLoader);
             int count = 0;
             for (Method m : playerAdClass.getDeclaredMethods()) {
                 if (("l".equals(m.getName()) && m.getParameterTypes().length == 0)
@@ -1171,8 +1361,10 @@ public class NicoEnhance extends XposedModule {
                 }
             }
             return count;
-        } catch (ClassNotFoundException e) { return 0; }
-        catch (Throwable t) { log(Log.WARN, TAG, "Failed to hook player video ad", t); return 0; }
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "Failed to hook player video ad", t);
+            return 0;
+        }
     }
 
     private int hookPlayerVideoAdMethod(Method method) {
@@ -1301,12 +1493,12 @@ public class NicoEnhance extends XposedModule {
 
     // ── Premium unlock ──
 
-    private void hookPremiumUnlock(ClassLoader classLoader) {
+    private void hookPremiumUnlock(ClassLoader classLoader, ClassNameProvider provider) {
         int count = 0;
-        count += hookNicoSessionGetter(classLoader);
-        count += hookNicoSessionReturn(classLoader);
-        count += hookSettingUiStatePremium(classLoader);
-        count += hookDataModelPremiumWithDexKit(classLoader);
+        count += hookNicoSessionGetter(classLoader, provider);
+        count += hookNicoSessionReturn(classLoader, provider);
+        count += hookSettingUiStatePremium(classLoader, provider);
+        count += hookDataModelPremiumWithDexKit(classLoader, provider);
         if (count > 0) {
             log(Log.INFO, TAG, "Premium unlock hooks installed: " + count);
         } else {
@@ -1314,10 +1506,12 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookNicoSessionGetter(ClassLoader classLoader) {
+    private int hookNicoSessionGetter(ClassLoader classLoader, ClassNameProvider provider) {
         try {
-            Class<?> sessionClass = Class.forName(
-                    "jp.co.dwango.niconico.domain.user.NicoSession", false, classLoader);
+            Class<?> sessionClass = provider.get(
+                    "jp.co.dwango.niconico.domain.user.NicoSession",
+                    "isPremium");
+            if (sessionClass == null) return 0;
             Method isPremium = sessionClass.getDeclaredMethod("isPremium");
             isPremium.setAccessible(true);
             hook(isPremium)
@@ -1333,9 +1527,10 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookNicoSessionReturn(ClassLoader classLoader) {
+    private int hookNicoSessionReturn(ClassLoader classLoader, ClassNameProvider provider) {
         try {
-            Class<?> ctxClass = Class.forName("aj.b", false, classLoader);
+            Class<?> ctxClass = provider.get("aj.b", "isPremium");
+            if (ctxClass == null) return 0;
             Method jMethod = ctxClass.getDeclaredMethod("j");
             jMethod.setAccessible(true);
             hook(jMethod)
@@ -1378,10 +1573,11 @@ public class NicoEnhance extends XposedModule {
         } catch (Throwable ignored) {}
     }
 
-    private int hookSettingUiStatePremium(ClassLoader classLoader) {
+    private int hookSettingUiStatePremium(ClassLoader classLoader, ClassNameProvider provider) {
         int count = 0;
+        Class<?> uiStateClass = provider.get("gp.y1", "isPremium", "premiumExpirationDateText");
+        if (uiStateClass == null) return 0;
         try {
-            Class<?> uiStateClass = Class.forName("gp.y1", false, classLoader);
             for (Method m : uiStateClass.getDeclaredMethods()) {
                 if (m.getReturnType() != Boolean.TYPE || m.getParameterTypes().length != 0) continue;
                 if ("e".equals(m.getName())) {
@@ -1402,11 +1598,12 @@ public class NicoEnhance extends XposedModule {
         return count;
     }
 
-    private int hookDataModelPremiumWithDexKit(ClassLoader classLoader) {
+    private int hookDataModelPremiumWithDexKit(ClassLoader classLoader, ClassNameProvider provider) {
+        if (!provider.bridgeReady()) return 0;
         int count = 0;
-        try (DexKitLocator locator = DexKitLocator.fromClassLoader(classLoader)) {
-            if (!locator.isValid()) return 0;
-            for (Class<?> clazz : locator.findClassesUsingStrings("isPremium")) {
+        try {
+            List<Class<?>> candidates = provider.findClassesUsingStrings("isPremium");
+            for (Class<?> clazz : candidates) {
                 count += hookBooleanGettersOnClass(clazz);
             }
         } catch (Throwable t) {
@@ -1835,6 +2032,4 @@ public class NicoEnhance extends XposedModule {
             for (int i = 0; i < g.getChildCount(); i++) translateViewTree(g.getChildAt(i), depth + 1);
         }
     }
-
-
 }

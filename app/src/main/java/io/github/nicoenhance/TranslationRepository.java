@@ -7,9 +7,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -29,9 +28,9 @@ public class TranslationRepository {
     private final StringTranslations exact;
     private final StringTranslations phrases;
 
-    private final Map<Integer, Optional<String>> stringCache = new ConcurrentHashMap<>();
-    private final Map<Integer, Optional<String>> pluralCache = new ConcurrentHashMap<>();
-    private final Map<String, Optional<String>> exactCache = new ConcurrentHashMap<>();
+    private final Map<Integer, String> stringCache = new ConcurrentHashMap<>();
+    private final Map<Integer, String> pluralCache = new ConcurrentHashMap<>();
+    private final Map<String, String> exactCache = new ConcurrentHashMap<>();
 
     public TranslationRepository(StringTranslations strings, StringTranslations exact, StringTranslations phrases) {
         this.strings = strings;
@@ -67,36 +66,50 @@ public class TranslationRepository {
     }
 
     public String findString(Resources res, int id) {
-        return stringCache.computeIfAbsent(id, key -> {
-            try {
-                if (!TARGET_PACKAGE.equals(res.getResourcePackageName(id))) return Optional.empty();
-                String type = res.getResourceTypeName(id);
-                if (!STRING_TYPE.equals(type)) return Optional.empty();
-                String name = res.getResourceEntryName(id);
-                String t = strings.get(name);
-                if (t == null) {
-                    Log.w(TAG, "MISS: " + name);
-                }
-                return Optional.ofNullable(t);
-            } catch (Throwable t) {
-                Log.w(TAG, "findString error", t);
-                return Optional.empty();
+        String cached = stringCache.get(id);
+        if (cached != null) return cached.length() == 0 ? null : cached;
+        if (stringCache.containsKey(id)) return null;
+        String result = lookupString(res, id);
+        stringCache.put(id, result == null ? "" : result);
+        return result;
+    }
+
+    private String lookupString(Resources res, int id) {
+        try {
+            if (!TARGET_PACKAGE.equals(res.getResourcePackageName(id))) return null;
+            String type = res.getResourceTypeName(id);
+            if (!STRING_TYPE.equals(type)) return null;
+            String name = res.getResourceEntryName(id);
+            String t = strings.get(name);
+            if (t == null) {
+                Log.w(TAG, "MISS: " + name);
             }
-        }).orElse(null);
+            return t;
+        } catch (Throwable t) {
+            Log.w(TAG, "findString error", t);
+            return null;
+        }
     }
 
     public String findQuantityString(Resources res, int id) {
-        return pluralCache.computeIfAbsent(id, key -> {
-            try {
-                if (!TARGET_PACKAGE.equals(res.getResourcePackageName(id))) return Optional.empty();
+        String cached = pluralCache.get(id);
+        if (cached != null) return cached.length() == 0 ? null : cached;
+        if (pluralCache.containsKey(id)) return null;
+        String result;
+        try {
+            if (!TARGET_PACKAGE.equals(res.getResourcePackageName(id))) result = null;
+            else {
                 String type = res.getResourceTypeName(id);
-                if (!PLURALS_TYPE.equals(type)) return Optional.empty();
-                return Optional.ofNullable(strings.get("plurals." + res.getResourceEntryName(id)));
-            } catch (Throwable t) {
-                Log.w(TAG, "findQuantityString error", t);
-                return Optional.empty();
+                result = PLURALS_TYPE.equals(type)
+                        ? strings.get("plurals." + res.getResourceEntryName(id))
+                        : null;
             }
-        }).orElse(null);
+        } catch (Throwable t) {
+            Log.w(TAG, "findQuantityString error", t);
+            result = null;
+        }
+        pluralCache.put(id, result == null ? "" : result);
+        return result;
     }
 
     public String findArrayItem(Resources res, int id, int index) {
@@ -114,12 +127,15 @@ public class TranslationRepository {
     public String findExactText(CharSequence source) {
         if (source == null) return null;
         String text = source.toString();
-        return exactCache.computeIfAbsent(text, key -> {
-            String result = exact.get(key);
-            if (result != null) return Optional.of(result);
-            if (!containsJapanese(key)) return Optional.empty();
-            return Optional.ofNullable(phrases.replacePhrases(key));
-        }).orElse(null);
+        String exactHit = exact.get(text);
+        if (exactHit != null) return exactHit;
+        String cached = exactCache.get(text);
+        if (cached != null) return cached.length() == 0 ? null : cached;
+        if (exactCache.containsKey(text)) return null;
+        if (!containsJapanese(text)) return null;
+        String translated = phrases.replacePhrases(text);
+        exactCache.put(text, translated == null ? "" : translated);
+        return translated;
     }
 
     public String translateText(String source) {
