@@ -2,6 +2,5 @@
 -keep class io.github.libxposed.api.** { *; }
 -keep class io.github.nicoenhance.NicoEnhance { *; }
 -keep class org.luckypray.dexkit.** { *; }
--keep class io.github.nicoenhance.DexKitLocator { *; }
 -keep class io.github.nicoenhance.ModuleConfig { *; }
 

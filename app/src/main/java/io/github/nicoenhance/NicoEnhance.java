@@ -657,6 +657,17 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
+    /**
+     * Attempt to inject a "NicoEnhance" entry next to the Compose-rendered "About this app"
+     * row on the settings screen.
+     *
+     * <p>This relies on two version-specific targets: a Compose settings-item renderer class
+     * (historically {@code hp.e0} with {@code k(int,Function0,Composer,int,int)} and
+     * {@code l(String,Function0,Composer,int,int)} methods) and a {@code R.string} holder
+     * (historically {@code mf.l0} with a {@code config_application_info} field). Both drifted
+     * away after niconico 9.x, so when either lookup fails this hook degrades to a no-op and
+     * the settings entry is provided by {@link #hookNicoSettingsEntry} instead.
+     */
     private void hookAboutAppComposeEntry(ClassLoader classLoader, ClassNameProvider provider) {
         try {
             Class<?> function0 = provider.get("qr.a");
@@ -667,21 +678,28 @@ public class NicoEnhance extends XposedModule {
             }
             Class<?> settingComponents = provider.get("hp.e0", "\u8a2d\u5b9a");
             if (settingComponents == null) {
-                log(Log.WARN, TAG, "Compose settings entry skipped: hp.e0 not found");
+                log(Log.INFO, TAG, "Compose settings entry skipped: renderer class not found, relying on settings-fragment hook");
                 return;
             }
-            Method settingTextItemByRes = settingComponents.getDeclaredMethod(
-                    "k", int.class, function0, composer, int.class, int.class);
-            Method settingTextItemByText = settingComponents.getDeclaredMethod(
-                    "l", String.class, function0, composer, int.class, int.class);
+            Method settingTextItemByRes;
+            Method settingTextItemByText;
+            try {
+                settingTextItemByRes = settingComponents.getDeclaredMethod(
+                        "k", int.class, function0, composer, int.class, int.class);
+                settingTextItemByText = settingComponents.getDeclaredMethod(
+                        "l", String.class, function0, composer, int.class, int.class);
+            } catch (NoSuchMethodException e) {
+                log(Log.INFO, TAG, "Compose settings entry skipped: k/l method signature mismatch on " + settingComponents.getName());
+                return;
+            }
             settingTextItemByRes.setAccessible(true);
             settingTextItemByText.setAccessible(true);
-            Class<?> mfL0 = provider.get("mf.l0", "config_application_info");
-            if (mfL0 == null) {
-                log(Log.WARN, TAG, "Compose settings entry skipped: mf.l0 not found");
+            Class<?> aboutAppResHolder = provider.get("mf.l0", "config_application_info");
+            if (aboutAppResHolder == null) {
+                log(Log.INFO, TAG, "Compose settings entry skipped: about-app resource holder not found");
                 return;
             }
-            int aboutAppTitleRes = mfL0.getField("config_application_info").getInt(null);
+            int aboutAppTitleRes = aboutAppResHolder.getField("config_application_info").getInt(null);
             Object nauxClick = createNauxiliaryClickCallback(function0, classLoader);
             hook(settingTextItemByRes)
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
@@ -1094,6 +1112,8 @@ public class NicoEnhance extends XposedModule {
         config.refresh(context);
         LinkedHashMap<String, ArrayList<ConfigRow>> groups = new LinkedHashMap<>();
         groups.put(CONFIG_GROUP_TRANSLATION, new ArrayList<>(java.util.Arrays.asList(
+                new ConfigRow(CONFIG_TRANSLATION_ENABLED, null,
+                        config.isTranslationEnabled()),
                 new ConfigRow(CONFIG_RUNTIME_TRANSLATION_TITLE, CONFIG_RUNTIME_TRANSLATION_SUMMARY,
                         config.isRuntimeTextTranslationSwitchEnabled()),
                 new ConfigRow(CONFIG_WEBVIEW_TRANSLATION_TITLE, CONFIG_WEBVIEW_TRANSLATION_SUMMARY,
@@ -1138,9 +1158,9 @@ public class NicoEnhance extends XposedModule {
                 .setNegativeButton(CONFIG_CANCEL, null)
                 .setPositiveButton(CONFIG_SAVE, (dialog, which) -> {
                     config.save(context,
-                            true,
                             rowsValueOr(groups.get(CONFIG_GROUP_TRANSLATION), 0, true),
                             rowsValueOr(groups.get(CONFIG_GROUP_TRANSLATION), 1, true),
+                            rowsValueOr(groups.get(CONFIG_GROUP_TRANSLATION), 2, true),
                             rowsValueOr(groups.get(CONFIG_GROUP_AD), 0, true),
                             rowsValueOr(groups.get(CONFIG_GROUP_DEBUG), 0, false),
                             rowsValueOr(groups.get(CONFIG_GROUP_PREMIUM), 0, true));
@@ -1217,7 +1237,7 @@ public class NicoEnhance extends XposedModule {
 
     private int hookInAppAdFactory(ClassLoader classLoader, ClassNameProvider provider) {
         int count = 0;
-        Class<?> factoryClass = provider.get("ul.i", "oxInAppAd");
+        Class<?> factoryClass = provider.get("sl.i", "oxInAppAd");
         if (factoryClass != null) {
             count += hookInAppAdFactoryMethods(factoryClass, "known");
         }
@@ -1279,33 +1299,33 @@ public class NicoEnhance extends XposedModule {
     }
 
     private int hookInAppAdController(ClassLoader classLoader, ClassNameProvider provider) {
-        Class<?> ctrlClass = provider.get("uf.g", "adUnitId");
+        Class<?> ctrlClass = provider.get("tf.l", "adUnitId", "nativeAd");
         if (ctrlClass == null) return 0;
         int count = 0;
-        count += hookAdControllerMethod(ctrlClass, "h");
-        count += hookAdControllerMethod(ctrlClass, "j");
-        count += hookAdControllerMethod(ctrlClass, "k");
-        count += hookAdControllerMethod(ctrlClass, "m");
+        for (Method m : ctrlClass.getDeclaredMethods()) {
+            if (m.getReturnType() != Void.TYPE || m.getParameterTypes().length != 0) continue;
+            count += hookAdControllerMethod(m);
+        }
+        if (count > 0) {
+            log(Log.INFO, TAG, "Ad controller hooks on " + ctrlClass.getName() + ": " + count);
+        }
         return count;
     }
 
-    private int hookAdControllerMethod(Class<?> ctrlClass, String methodName) {
-        int count = 0;
-        for (Method m : ctrlClass.getDeclaredMethods()) {
-            if (!methodName.equals(m.getName()) || m.getReturnType() != Void.TYPE) continue;
-            m.setAccessible(true);
-            try {
-                hook(m)
-                        .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-                        .intercept(chain -> {
-                            if (!shouldRemoveAds(chain.getThisObject())) return chain.proceed();
-                            hideControllerContainer(chain.getThisObject());
-                            return null;
-                        });
-                count++;
-            } catch (Throwable ignored) {}
-        }
-        return count;
+    private int hookAdControllerMethod(Method method) {
+        method.setAccessible(true);
+        try {
+            hook(method)
+                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                    .intercept(chain -> {
+                        if (!shouldRemoveAds(chain.getThisObject())) return chain.proceed();
+                        hideControllerContainer(chain.getThisObject());
+                        return null;
+                    });
+            return 1;
+        } catch (Throwable ignored) { return 0; }
+    }
+        } catch (Throwable ignored) { return 0; }
     }
 
     private int hookInAppAdViewClass(ClassLoader classLoader, ClassNameProvider provider, String className) {
@@ -1344,7 +1364,7 @@ public class NicoEnhance extends XposedModule {
     }
 
     private int hookKnownComposeAdBanner(ClassLoader classLoader, ClassNameProvider provider) {
-        Class<?> containerClass = provider.get("jk.c", "AdBannerContainer");
+        Class<?> containerClass = provider.get("hk.c", "AdBannerContainer");
         if (containerClass == null) return 0;
         try {
             int count = 0;
@@ -1373,7 +1393,7 @@ public class NicoEnhance extends XposedModule {
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> {
                         Object adEntry = chain.getArgs().isEmpty() ? null : chain.getArg(0);
-                        View adView = getAdEntryView(adEntry);
+                        View adView = getAdEntryView(adEntry, chain);
                         if (!shouldRemoveAds(adView != null ? adView : adEntry)) return chain.proceed();
                         hideAdView(adView);
                         stopAdEntry(adEntry);
@@ -1479,13 +1499,30 @@ public class NicoEnhance extends XposedModule {
         } catch (Throwable ignored) {}
     }
 
-    private View getAdEntryView(Object adEntry) {
+    private View getAdEntryView(Object adEntry, Object chain) {
         if (adEntry == null) return null;
-        try {
-            Method m = adEntry.getClass().getMethod("b");
-            Object v = m.invoke(adEntry);
-            return v instanceof View ? (View) v : null;
-        } catch (Throwable e) { return null; }
+        Class<?> cls = adEntry.getClass();
+        Context ctx = extractContext(adEntry);
+        if (ctx == null) ctx = currentActivity.get();
+        for (Method m : cls.getMethods()) {
+            if (!"b".equals(m.getName())) continue;
+            Class<?>[] pts = m.getParameterTypes();
+            Object result;
+            try {
+                if (pts.length == 0) {
+                    result = m.invoke(adEntry);
+                } else if (pts.length >= 1 && Context.class.isAssignableFrom(pts[pts.length - 1]) && ctx != null) {
+                    Object[] args = new Object[pts.length];
+                    args[args.length - 1] = ctx;
+                    for (int i = 0; i < args.length - 1; i++) args[i] = adEntry;
+                    result = m.invoke(adEntry, args);
+                } else {
+                    continue;
+                }
+            } catch (Throwable ignored) { continue; }
+            if (result instanceof View) return (View) result;
+        }
+        return null;
     }
 
     private void stopAdEntry(Object adEntry) {
@@ -1566,21 +1603,27 @@ public class NicoEnhance extends XposedModule {
 
     private int hookNicoSessionReturn(ClassLoader classLoader, ClassNameProvider provider) {
         try {
-            Class<?> ctxClass = provider.get("aj.b", "isPremium");
-            if (ctxClass == null) return 0;
-            Method jMethod = ctxClass.getDeclaredMethod("j");
-            jMethod.setAccessible(true);
-            hook(jMethod)
-                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-                    .intercept(chain -> {
-                        Object result = chain.proceed();
-                        if (!shouldUnlockPremium() || result == null) return result;
-                        forcePremiumField(result);
-                        return result;
-                    });
-            return 1;
+            Class<?> sessionClass = provider.get(
+                    "jp.co.dwango.niconico.domain.user.NicoSession",
+                    "isPremium");
+            if (sessionClass == null) return 0;
+            int count = 0;
+            for (Method m : sessionClass.getDeclaredMethods()) {
+                if (m.getReturnType() != sessionClass || m.getParameterTypes().length != 0) continue;
+                m.setAccessible(true);
+                hook(m)
+                        .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                        .intercept(chain -> {
+                            Object result = chain.proceed();
+                            if (!shouldUnlockPremium() || result == null) return result;
+                            forcePremiumField(result);
+                            return result;
+                        });
+                count++;
+            }
+            return count;
         } catch (Throwable t) {
-            log(Log.WARN, TAG, "Failed to hook aj.b.j", t);
+            log(Log.WARN, TAG, "Failed to hook NicoSession return methods", t);
             return 0;
         }
     }
@@ -1612,7 +1655,7 @@ public class NicoEnhance extends XposedModule {
 
     private int hookSettingUiStatePremium(ClassLoader classLoader, ClassNameProvider provider) {
         int count = 0;
-        Class<?> uiStateClass = provider.get("gp.y1", "isPremium", "premiumExpirationDateText");
+        Class<?> uiStateClass = provider.get("ep.y1", "isPremium", "premiumExpirationDateText");
         if (uiStateClass == null) return 0;
         try {
             for (Method m : uiStateClass.getDeclaredMethods()) {
@@ -1629,8 +1672,11 @@ public class NicoEnhance extends XposedModule {
                     break;
                 }
             }
+            if (count == 0) {
+                count += hookBooleanGettersOnClass(uiStateClass);
+            }
         } catch (Throwable t) {
-            log(Log.WARN, TAG, "Failed to hook gp.y1.e", t);
+            log(Log.WARN, TAG, "Failed to hook " + uiStateClass.getName() + " premium getter", t);
         }
         return count;
     }
