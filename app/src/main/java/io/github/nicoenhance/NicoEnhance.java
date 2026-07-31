@@ -1325,8 +1325,6 @@ public class NicoEnhance extends XposedModule {
             return 1;
         } catch (Throwable ignored) { return 0; }
     }
-        } catch (Throwable ignored) { return 0; }
-    }
 
     private int hookInAppAdViewClass(ClassLoader classLoader, ClassNameProvider provider, String className) {
         Class<?> adViewClass = provider.get(className);
