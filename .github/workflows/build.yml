@@ -53,8 +53,7 @@ jobs:
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 30
 
-      - name: Create GitHub Release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Update Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -63,13 +62,18 @@ jobs:
           if [ ! -f "$APK" ]; then
             echo "APK not found at $APK"; exit 1
           fi
-          if gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "Release ${{ github.ref_name }} already exists, deleting and recreating"
-            gh release delete "${{ github.ref_name }}" --repo "${{ github.repository }}" --yes --cleanup-tag
-            git tag -d "${{ github.ref_name }}" || true
+          RELEASE_TAG="NicoEnhance"
+          if gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "${{ github.repository }}" \
+              --title "NicoEnhance - $(date +%Y-%m-%d)" \
+              --generate-notes || true
+            gh release upload "$RELEASE_TAG" "$APK" \
+              --repo "${{ github.repository }}" \
+              --clobber || true
+          else
+            gh release create "$RELEASE_TAG" "$APK" \
+              --repo "${{ github.repository }}" \
+              --title "NicoEnhance - $(date +%Y-%m-%d)" \
+              --generate-notes
           fi
-          gh release create "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --title "${{ github.ref_name }}" \
-            --generate-notes \
-            "$APK"
