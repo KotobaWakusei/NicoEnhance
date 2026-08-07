@@ -1,0 +1,19 @@
+# 统一 Git 行尾与换行符处理，避免 Windows (CRLF) 与 Linux CI (LF) 之间互相改写。
+* text=auto
+
+*.java text eol=lf
+*.kt text eol=lf
+*.kts text eol=lf
+*.xml text eol=lf
+*.properties text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.gradle text eol=lf
+*.sh text eol=lf
+
+*.png binary
+*.jpg binary
+*.webp binary
+*.jks binary
+*.jar binary

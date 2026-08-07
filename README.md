@@ -1,6 +1,11 @@
 # NicoEnhance
 
-Nico增强模块 —— 基于 LSPosed 的 niconico Android 客户端增强模块。
+[![Build](https://github.com/KotobaWakusei/NicoEnhance/actions/workflows/build.yml/badge.svg)](https://github.com/KotobaWakusei/NicoEnhance/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/KotobaWakusei/NicoEnhance)](https://github.com/KotobaWakusei/NicoEnhance/releases)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![API](https://img.shields.io/badge/API-29%2B-brightgreen.svg)](https://developer.android.com/studio/releases/platforms)
+
+基于 LSPosed 的 niconico Android 客户端增强模块。
 
 ## 功能
 
@@ -14,9 +19,11 @@ Nico增强模块 —— 基于 LSPosed 的 niconico Android 客户端增强模�
 
 ## 要求
 
-- Android 10 (API 29) 或更高
-- LSPosed v1.9+ / LSPosed v2.x
-- 已 Root 设备 (KernelSU / Magisk / APatch)
+| 项 | 要求 |
+| --- | --- |
+| Android | 10 (API 29) 或更高 |
+| LSPosed | v1.9+ / v2.x |
+| 设备 | 已 Root（KernelSU / Magisk / APatch） |
 
 ## 安装
 
@@ -32,16 +39,36 @@ Nico增强模块 —— 基于 LSPosed 的 niconico Android 客户端增强模�
 ## 构建
 
 ```bash
-./gradlew assembleRelease
+./gradlew assembleDebug      # 调试包
+./gradlew assembleRelease    # 发布包（需签名环境变量）
 ```
 
-构建产物位于 `app/build/outputs/apk/release/`。
+构建产物位于 `app/build/outputs/apk/`。签名信息通过环境变量注入：
+
+| 环境变量 | 说明 |
+| --- | --- |
+| `KS_STORE_PASSWORD` | keystore 密码 |
+| `KS_KEY_ALIAS` | 密钥别名 |
+| `KS_KEY_PASSWORD` | 密钥密码 |
+
+## 目录结构
+
+```
+app/src/main/
+├── assets/translations/zh-CN/   # 翻译资源（strings / exact / phrases）
+├── java/io/github/nicoenhance/  # 模块源码
+└── resources/META-INF/xposed/   # LSPosed 模块元数据
+```
 
 ## 致谢
 
 - 本项目的功能参考自 [NAuxiliary](https://github.com/chorusfruit-233/NAuxiliary)
 - 翻译资源基于 niconico Android 客户端提取
 
+## 贡献
+
+欢迎提交 Issue 与 PR，请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
+
 ## License
 
-GNU General Public License v3.0
+[GNU General Public License v3.0](LICENSE)

@@ -14,8 +14,9 @@ android {
         applicationId = "io.github.nicoenhance"
         minSdk = 29
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.0.3"
+        // 可在 CI 中用 -PversionName=... -PversionCode=... 覆盖（tag 驱动发布）
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 5
+        versionName = (project.findProperty("versionName") as String?) ?: "1.0.3"
     }
 
     signingConfigs {
@@ -30,7 +31,10 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
-            signingConfig = signingConfigs.getByName("release")
+            // 本地/无 keystore 环境（如 fork PR）不强制签名，产出 unsigned APK
+            if (file("keystore/nicoenhance.jks").exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

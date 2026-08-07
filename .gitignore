@@ -1,20 +1,32 @@
+# --- IDE / OS ---
 *.iml
-.gradle
-/local.properties
-/.idea
+.idea/
+.vscode/
 .DS_Store
-/build
-/captures
+Thumbs.db
+
+# --- Gradle / Android ---
+.gradle/
+build/
+captures/
 .externalNativeBuild
 .cxx
 local.properties
-/app/build
-/app/release
+*.log
+
+# --- 模块输出 ---
+/app/build/
+/app/release/
 /app/keystore/
 *.jks
 *.keystore
 *.apk
 *.apks
+*.aab
 *.zip
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
+
+# --- 本地解包/临时目录 ---
+temp_base_apk/
+niconico_*.apks
