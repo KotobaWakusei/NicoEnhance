@@ -149,7 +149,7 @@ public class MainActivity extends AppCompatActivity {
                 String result;
                 if (latestTag.isEmpty()) {
                     result = "无发布版本";
-                } else if (latestTag.equals("v" + currentVersion)) {
+                } else if (isVersionAtLeast(currentVersion, latestTag)) {
                     result = "已是最新版本 (" + latestTag + ")";
                 } else {
                     result = "发现新版本: " + latestTag;
@@ -163,6 +163,28 @@ public class MainActivity extends AppCompatActivity {
                 if (conn != null) conn.disconnect();
             }
         }).start();
+    }
+
+    /**
+     * Compare semantic versions ignoring a leading "v" and treating missing segments as 0,
+     * so "v1.0.3" == "1.0.3" and "1.10" > "1.9".
+     */
+    private static boolean isVersionAtLeast(String installed, String tag) {
+        try {
+            String clean = tag.replaceFirst("^[vV]", "");
+            String[] a = installed.split("\\.");
+            String[] b = clean.split("\\.");
+            int len = Math.max(a.length, b.length);
+            for (int i = 0; i < len; i++) {
+                int x = i < a.length ? Integer.parseInt(a[i]) : 0;
+                int y = i < b.length ? Integer.parseInt(b[i]) : 0;
+                if (y > x) return false;
+                if (y < x) return true;
+            }
+            return true;
+        } catch (NumberFormatException e) {
+            return tag.equals("v" + installed) || tag.equals(installed);
+        }
     }
 
     public boolean isModuleActive() {

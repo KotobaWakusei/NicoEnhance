@@ -138,6 +138,8 @@ public class NicoEnhance extends XposedModule {
 
     private static volatile boolean adActivityBlockHookInstalled;
 
+    private final AtomicBoolean sentinelWarnLogged = new AtomicBoolean();
+
     private TranslationRepository repo;
     private final ModuleConfig config = new ModuleConfig();
     private final AtomicBoolean resourceHooksInstalled = new AtomicBoolean();
@@ -235,11 +237,10 @@ public class NicoEnhance extends XposedModule {
 
     /**
      * After all hooks installed, drop a sentinel where {@link MainActivity} can reach it.
-     * Strictly speaking only LSPosed-framework libraries can validate this hook actually ran,
-     * but a public {@link android.provider.Settings.System} slot is enough to detect "module
-     * has been processed at least once" without root or extra permissions and survives
-     * process death. Writing always succeeds regardless of hooking outcome so the UI at least
-     * tells the user to relaunch niconico for a self-hook to land.
+     * Best-effort: writing {@link android.provider.Settings.System} requires WRITE_SETTINGS
+     * (not held by the target app), so this may throw on modern Android; the failure is
+     * swallowed and {@link MainActivity} falls back to its other activation signals
+     * (in-process library maps probe, LSPosed marker dirs, module data-dir flag).
      */
     private void writeModuleActiveSentinel() {
         try {
@@ -253,7 +254,10 @@ public class NicoEnhance extends XposedModule {
                     Long.toString(System.currentTimeMillis()));
             log(Log.INFO, TAG, "Module-active sentinel written to " + SETTINGS_SENTINEL_KEY);
         } catch (Throwable t) {
-            log(Log.WARN, TAG, "Failed to write module-active sentinel", t);
+            // Expected on Android 12+ (WRITE_SETTINGS required); MainActivity uses fallbacks.
+            if (sentinelWarnLogged.compareAndSet(false, true)) {
+                log(Log.WARN, TAG, "Failed to write module-active sentinel (expected on Android 12+); MainActivity will fall back to other signals", t);
+            }
         }
     }
 
@@ -294,7 +298,9 @@ public class NicoEnhance extends XposedModule {
             hook(m).setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                 .intercept(chain -> {
                     String t = findQuantityString((Resources) chain.getThisObject(), (int) chain.getArg(0));
-                    return t != null ? t : chain.proceed();
+                    if (t != null) return t;
+                    Object original = chain.proceed();
+                    return translateQuantityFallback(original);
                 });
         }
 
@@ -304,9 +310,22 @@ public class NicoEnhance extends XposedModule {
                 Resources res = (Resources) chain.getThisObject();
                 int id = (int) chain.getArg(0);
                 String t = findQuantityString(res, id);
-                if (t == null) return chain.proceed();
-                return repo.format(t, (Object[]) chain.getArg(2));
+                if (t != null) return repo.format(t, (Object[]) chain.getArg(2));
+                Object original = chain.proceed();
+                return translateQuantityFallback(original);
             });
+    }
+
+    /**
+     * The {@code plurals.} dictionary section is currently empty, so exact-quantity lookups
+     * always miss. Degrade gracefully: if the result still contains Japanese, translate the
+     * readable text via phrases/exact without re-substituting count placeholders.
+     */
+    private Object translateQuantityFallback(Object original) {
+        if (!(original instanceof CharSequence)) return original;
+        String text = ((CharSequence) original).toString();
+        String translated = translateText(text);
+        return translated != null ? translated : original;
     }
 
     private void hookArrayMethods() throws NoSuchMethodException {
@@ -1341,9 +1360,10 @@ public class NicoEnhance extends XposedModule {
     }
 
     private int hookAdViewNoArgMethod(Class<?> adViewClass, String methodName) {
+        Method m = findNoArgVoidMethod(adViewClass, methodName);
+        if (m == null) return 0;
+        m.setAccessible(true);
         try {
-            Method m = adViewClass.getMethod(methodName);
-            if (m.getReturnType() != Void.TYPE) return 0;
             hook(m)
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> {
@@ -1352,8 +1372,25 @@ public class NicoEnhance extends XposedModule {
                         return null;
                     });
             return 1;
-        } catch (NoSuchMethodException e) { return 0; }
-        catch (Throwable t) { log(Log.WARN, TAG, "Failed to hook ad view method", t); return 0; }
+        } catch (Throwable t) { log(Log.WARN, TAG, "Failed to hook ad view method", t); return 0; }
+    }
+
+    /**
+     * {@code getMethod} only returns public methods, so obfuscated/no-visibility ad-view
+     * methods named "start" / "a" were silently unhooked. Walk declared methods instead.
+     */
+    private static Method findNoArgVoidMethod(Class<?> clazz, String name) {
+        Class<?> cur = clazz;
+        while (cur != null && cur != Object.class) {
+            for (Method m : cur.getDeclaredMethods()) {
+                if (name.equals(m.getName()) && m.getParameterTypes().length == 0
+                        && m.getReturnType() == Void.TYPE) {
+                    return m;
+                }
+            }
+            cur = cur.getSuperclass();
+        }
+        return null;
     }
 
     private int hookComposeAdBanner(ClassLoader classLoader, ClassNameProvider provider) {
@@ -1671,7 +1708,9 @@ public class NicoEnhance extends XposedModule {
                 }
             }
             if (count == 0) {
-                count += hookBooleanGettersOnClass(uiStateClass);
+                // This is a single, targeted UI-state class whose premium getter historically
+                // had a short obfuscated name ("e"); hooking every boolean getter here is safe.
+                count += hookBooleanGettersOnClass(uiStateClass, false);
             }
         } catch (Throwable t) {
             log(Log.WARN, TAG, "Failed to hook " + uiStateClass.getName() + " premium getter", t);
@@ -1685,7 +1724,7 @@ public class NicoEnhance extends XposedModule {
         try {
             List<Class<?>> candidates = provider.findClassesUsingStrings("isPremium");
             for (Class<?> clazz : candidates) {
-                count += hookBooleanGettersOnClass(clazz);
+                count += hookBooleanGettersOnClass(clazz, true);
             }
         } catch (Throwable t) {
             log(Log.WARN, TAG, "DexKit failed to find premium data models", t);
@@ -1693,13 +1732,17 @@ public class NicoEnhance extends XposedModule {
         return count;
     }
 
-    private int hookBooleanGettersOnClass(Class<?> clazz) {
+    private int hookBooleanGettersOnClass(Class<?> clazz, boolean onlyPremiumNames) {
         int count = 0;
         for (Method m : clazz.getDeclaredMethods()) {
             if (m.getReturnType() != Boolean.TYPE || m.getParameterTypes().length != 0) continue;
             String n = m.getName();
             if ("equals".equals(n) || "hashCode".equals(n) || "toString".equals(n)) continue;
             if (m.getDeclaringClass().equals(Object.class)) continue;
+            // Only force getters that are plausibly premium-related. Blanket-hooking every
+            // boolean getter on a DexKit sweep forces unrelated flags (isEnabled, isNetworkOK,
+            // isInitialized, ...) to true and breaks app behaviour.
+            if (onlyPremiumNames && !n.toLowerCase(Locale.ROOT).contains("premium")) continue;
             m.setAccessible(true);
             try {
                 hook(m)

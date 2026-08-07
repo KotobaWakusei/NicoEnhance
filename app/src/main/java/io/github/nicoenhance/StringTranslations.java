@@ -2,9 +2,7 @@ package io.github.nicoenhance;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -12,14 +10,15 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * Phrase-level dictionary backed by an Aho-Corasick automaton.
+ * Phrase-level dictionary backed by a compressed trie.
  *
  * <p>The previous implementation called {@link String#replace(CharSequence, CharSequence)} once
  * per dictionary entry. With 200+ phrases that translates to 200+ intermediate string
- * allocations per call, which on Compose hot paths adds noticeable GC pressure. The automaton
- * walks the input exactly once and replaces longest matches greedily from left to right.</p>
+ * allocations per call, which on Compose hot paths adds noticeable GC pressure. The trie is
+ * walked left to right and, at every position, the longest dictionary phrase starting there is
+ * extended as far as possible before emitting it (leftmost-longest greedy).
  *
- * <p>Dictionaries are immutable after the first use, so the automaton is built lazily on the
+ * <p>Dictionaries are immutable after the first use, so the trie is built lazily on the
  * first call to {@link #replacePhrases(String)} and cached for subsequent calls.</p>
  */
 public class StringTranslations {
@@ -53,6 +52,24 @@ public class StringTranslations {
     }
 
     /**
+     * Resolve a dictionary value, following {@code @string/name} references recursively
+     * (a pattern copied verbatim from the extracted resource that must be expanded to the
+     * referenced entry's own translation). Returns {@code null} when the key or any
+     * reference target is missing, so callers fall back to the original text.
+     */
+    public String resolve(String key) {
+        return resolve(key, 8);
+    }
+
+    private String resolve(String key, int depth) {
+        if (key == null || depth <= 0) return null;
+        String value = props.getProperty(key);
+        if (value == null) return null;
+        if (value.startsWith("@string/")) return resolve(value.substring(8), depth - 1);
+        return value;
+    }
+
+    /**
      * Replace every dictionary phrase that appears in {@code source}. Returns {@code null} when
      * nothing matched so callers can cheaply distinguish "no change" from "translated to itself".
      */
@@ -61,34 +78,40 @@ public class StringTranslations {
         AcNode root = ensureAutomaton();
         if (root == null) return null;
 
+        // leftmost-longest greedy scan: at each position try to extend a phrase for as
+        // far as the trie allows, remember the longest prefix found, then emit it once
+        // the extension fails. This yields the maximal phrase starting at the leftmost
+        // position, which is what replace-style translation intends.
         StringBuilder out = new StringBuilder(source.length() + 32);
         int writeStart = 0;
         int i = 0;
-        AcNode node = root;
-        while (i < source.length()) {
-            char c = source.charAt(i);
-            AcNode next = node.step(c);
-            if (next == null) {
-                if (node != root) {
-                    node = root;
-                    continue;
+        final int n = source.length();
+        while (i < n) {
+            AcNode node = root;
+            int bestLen = -1;
+            String bestValue = null;
+            int j = i;
+            while (j < n) {
+                AcNode next = node.children.get(source.charAt(j));
+                if (next == null) break;
+                node = next;
+                j++;
+                if (node.matchValue != null) {
+                    bestLen = j - i;
+                    bestValue = node.matchValue;
                 }
-                out.append(c);
-                i++;
-                continue;
             }
-            node = next;
-            i++;
-            if (node.match != null) {
-                int matchStart = i - node.match.length();
-                if (matchStart > writeStart) out.append(source, writeStart, matchStart);
-                out.append(node.matchValue);
-                writeStart = i;
-                node = root;
+            if (bestLen > 0) {
+                if (i > writeStart) out.append(source, writeStart, i);
+                out.append(bestValue);
+                writeStart = i + bestLen;
+                i += bestLen;
+            } else {
+                i++;
             }
         }
-        if (writeStart < source.length()) {
-            out.append(source, writeStart, source.length());
+        if (writeStart < n) {
+            out.append(source, writeStart, n);
         }
         String result = out.toString();
         if (result.length() == source.length() && result.equals(source)) return null;
@@ -117,7 +140,6 @@ public class StringTranslations {
                 if (value == null || key.isEmpty()) continue;
                 insert(root, key, value);
             }
-            buildFailures(root);
             automaton = root;
             return root;
         }
@@ -129,56 +151,11 @@ public class StringTranslations {
             char c = key.charAt(i);
             cur = cur.children.computeIfAbsent(c, k -> new AcNode());
         }
-        if (cur.match == null || key.length() > cur.match.length()) {
-            cur.match = key;
-            cur.matchValue = value;
-        }
-    }
-
-    private static void buildFailures(AcNode root) {
-        ArrayDeque<AcNode> queue = new ArrayDeque<>();
-        for (AcNode child : root.children.values()) {
-            if (child == null) continue;
-            child.fail = root;
-            queue.add(child);
-        }
-        while (!queue.isEmpty()) {
-            AcNode cur = queue.poll();
-            for (Map.Entry<Character, AcNode> e : cur.children.entrySet()) {
-                char c = e.getKey();
-                AcNode child = e.getValue();
-                if (child == null) continue;
-                queue.add(child);
-                AcNode fail = cur.fail;
-                while (fail != null && fail.children.get(c) == null) {
-                    fail = fail.fail;
-                }
-                child.fail = fail == null ? root : fail.children.get(c);
-                if (child.fail == null) child.fail = root;
-                if (child.fail.match != null && (child.match == null
-                        || child.fail.match.length() > child.match.length())) {
-                    child.match = child.fail.match;
-                    child.matchValue = child.fail.matchValue;
-                }
-            }
-        }
+        cur.matchValue = value;
     }
 
     private static final class AcNode {
         final Map<Character, AcNode> children = new HashMap<>();
-        AcNode fail;
-        String match;
         String matchValue;
-
-        AcNode step(char c) {
-            AcNode cur = this;
-            while (cur != null) {
-                AcNode next = cur.children.get(c);
-                if (next != null) return next;
-                if (cur == this) return null;
-                cur = cur.fail;
-            }
-            return null;
-        }
     }
 }

@@ -28,9 +28,21 @@ public class TranslationRepository {
     private final StringTranslations exact;
     private final StringTranslations phrases;
 
-    private final Map<Integer, String> stringCache = new ConcurrentHashMap<>();
-    private final Map<Integer, String> pluralCache = new ConcurrentHashMap<>();
-    private final Map<String, String> exactCache = new ConcurrentHashMap<>();
+    private static final Map<Integer, String> stringCache = new ConcurrentHashMap<>();
+    private static final Map<Integer, String> pluralCache = new ConcurrentHashMap<>();
+    private static final Map<String, String> exactCache = new ConcurrentHashMap<>();
+
+    private static final int EXACT_CACHE_LIMIT = 2048;
+
+    /**
+     * Insert into an unbounded numeric/string cache; when it passes {@link #EXACT_CACHE_LIMIT}
+     * entries the whole cache is cleared so long-lived UIs (comment streams, dynamic lists)
+     * cannot grow memory without bound.
+     */
+    private static void putBounded(Map<String, String> cache, String key, String value) {
+        if (cache.size() >= EXACT_CACHE_LIMIT) cache.clear();
+        cache.put(key, value);
+    }
 
     public TranslationRepository(StringTranslations strings, StringTranslations exact, StringTranslations phrases) {
         this.strings = strings;
@@ -79,12 +91,7 @@ public class TranslationRepository {
             if (!TARGET_PACKAGE.equals(res.getResourcePackageName(id))) return null;
             String type = res.getResourceTypeName(id);
             if (!STRING_TYPE.equals(type)) return null;
-            String name = res.getResourceEntryName(id);
-            String t = strings.get(name);
-            if (t == null) {
-                Log.w(TAG, "MISS: " + name);
-            }
-            return t;
+            return strings.resolve(res.getResourceEntryName(id));
         } catch (Throwable t) {
             Log.w(TAG, "findString error", t);
             return null;
@@ -101,7 +108,7 @@ public class TranslationRepository {
             else {
                 String type = res.getResourceTypeName(id);
                 result = PLURALS_TYPE.equals(type)
-                        ? strings.get("plurals." + res.getResourceEntryName(id))
+                        ? strings.resolve("plurals." + res.getResourceEntryName(id))
                         : null;
             }
         } catch (Throwable t) {
@@ -117,7 +124,7 @@ public class TranslationRepository {
             if (!TARGET_PACKAGE.equals(res.getResourcePackageName(id))) return null;
             String type = res.getResourceTypeName(id);
             if (!ARRAY_TYPE.equals(type) && !STRING_ARRAY_TYPE.equals(type)) return null;
-            return strings.get("array." + res.getResourceEntryName(id) + "." + index);
+            return strings.resolve("array." + res.getResourceEntryName(id) + "." + index);
         } catch (Throwable t) {
             Log.w(TAG, "findArrayItem error", t);
             return null;
@@ -134,7 +141,7 @@ public class TranslationRepository {
         if (exactCache.containsKey(text)) return null;
         if (!containsJapanese(text)) return null;
         String translated = phrases.replacePhrases(text);
-        exactCache.put(text, translated == null ? "" : translated);
+        putBounded(exactCache, text, translated == null ? "" : translated);
         return translated;
     }
 
