@@ -140,22 +140,22 @@ public class MainActivity extends AppCompatActivity {
                     String line;
                     while ((line = br.readLine()) != null) sb.append(line);
 
-                JSONObject release = new JSONObject(sb.toString());
-                String latestTag = release.optString("tag_name", "");
+                    JSONObject release = new JSONObject(sb.toString());
+                    String latestTag = release.optString("tag_name", "");
 
-                getPreferences(MODE_PRIVATE).edit().putLong("last_update_check", System.currentTimeMillis()).apply();
+                    getPreferences(MODE_PRIVATE).edit().putLong("last_update_check", System.currentTimeMillis()).apply();
 
-                String result;
-                if (latestTag.isEmpty()) {
-                    result = "无发布版本";
-                } else if (isVersionAtLeast(currentVersion, latestTag)) {
-                    result = "已是最新版本 (" + latestTag + ")";
-                } else {
-                    result = "发现新版本: " + latestTag;
-                }
-                String finalResult = result;
-                runOnUiThread(() -> updateStatus.setText(finalResult));
-            } catch (Exception e) {
+                    String result;
+                    if (latestTag.isEmpty()) {
+                        result = "无发布版本";
+                    } else if (isVersionAtLeast(currentVersion, latestTag)) {
+                        result = "已是最新版本 (" + latestTag + ")";
+                    } else {
+                        result = "发现新版本: " + latestTag;
+                    }
+                    String finalResult = result;
+                    runOnUiThread(() -> updateStatus.setText(finalResult));
+                } catch (Exception e) {
                 String msg = e.getMessage();
                 runOnUiThread(() -> updateStatus.setText("检查失败" + (msg != null ? ": " + msg : "")));
             } finally {

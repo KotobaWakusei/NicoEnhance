@@ -1,0 +1,7 @@
+fix: resource leaks, silent exceptions, add debug logging
+
+- Fix resource leaks in MainActivity (BufferedReader, FileInputStream)
+- Replace silent catch blocks with debugLog() in NicoEnhance
+- Add debugLog() helper controlled by config.isDebugLogEnabled()
+- Update ClassNameProvider to log NoSuchMethodException at VERBOSE level
+- All exception handlers now log when debug mode is enabled

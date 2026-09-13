@@ -1,0 +1,1 @@
+fix(MainActivity): close try-with-resources block
