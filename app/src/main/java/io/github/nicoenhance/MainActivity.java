@@ -155,7 +155,8 @@ public class MainActivity extends AppCompatActivity {
                     }
                     String finalResult = result;
                     runOnUiThread(() -> updateStatus.setText(finalResult));
-                } catch (Exception e) {
+                }
+            } catch (Exception e) {
                 String msg = e.getMessage();
                 runOnUiThread(() -> updateStatus.setText("检查失败" + (msg != null ? ": " + msg : "")));
             } finally {

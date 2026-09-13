@@ -1,0 +1,1 @@
+fix(MainActivity): fix try-catch structure for try-with-resources
