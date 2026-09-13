@@ -722,12 +722,14 @@ public class NicoEnhance extends XposedModule {
             Object nauxClick = createNauxiliaryClickCallback(function0, classLoader);
             hook(settingTextItemByRes)
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-                    .intercept(chain -> {
+.intercept(chain -> {
                         Object result = chain.proceed();
                         if ((Integer) chain.getArg(0) == aboutAppTitleRes) {
                             try {
                                 settingTextItemByText.invoke(null, SETTINGS_ENTRY_TITLE, nauxClick, chain.getArg(2), 0, 0);
-                            } catch (Throwable ignored) {}
+                            } catch (Throwable t) {
+                                debugLog("Compose settings entry insert failed", t);
+                            }
                         }
                         return result;
                     });
@@ -761,9 +763,13 @@ public class NicoEnhance extends XposedModule {
             try {
                 Class<?> uc = Class.forName(cn, false, classLoader);
                 for (String fn : fields) {
-                    try { return uc.getField(fn).get(null); } catch (NoSuchFieldException ignored) {}
+                    try { return uc.getField(fn).get(null); } catch (NoSuchFieldException e) {
+                        debugLog("Kotlin Unit field not found: " + fn, e);
+                    }
                 }
-            } catch (Throwable ignored) {}
+            } catch (Throwable t) {
+                debugLog("Kotlin Unit class not found: " + cn, t);
+            }
         }
         return null;
     }
@@ -818,7 +824,9 @@ public class NicoEnhance extends XposedModule {
             return;
         }
         ViewGroup.LayoutParams params = createTitleBarButtonParams(titleBar, button.getContext());
-        try { titleBar.addView(button, params); } catch (Throwable ignored) {}
+        try { titleBar.addView(button, params); } catch (Throwable t) {
+            debugLog("addButtonToTitleBar failed", t);
+        }
     }
 
     private void addButtonToHorizontalTitleBar(LinearLayout titleBar, View button) {
@@ -833,7 +841,9 @@ public class NicoEnhance extends XposedModule {
                 Math.max(dp(ctx, 40), Math.min(dp(ctx, 56), titleBar.getHeight())));
         params.gravity = Gravity.CENTER_VERTICAL;
         params.setMargins(dp(ctx, 8), 0, dp(ctx, 8), 0);
-        try { titleBar.addView(button, params); } catch (Throwable ignored) {}
+        try { titleBar.addView(button, params); } catch (Throwable t) {
+            debugLog("addButtonToHorizontalTitleBar failed", t);
+        }
     }
 
     private ViewGroup.LayoutParams createTitleBarButtonParams(ViewGroup titleBar, Context ctx) {
@@ -884,7 +894,9 @@ public class NicoEnhance extends XposedModule {
                     ((ViewGroup.MarginLayoutParams) p).setMargins(0, 0, dp(titleBar.getContext(), 8), 0);
                 }
                 return (ViewGroup.LayoutParams) p;
-            } catch (Throwable ignored) {}
+            } catch (Throwable t) {
+                debugLog("createToolbarLayoutParams failed for " + cn, t);
+            }
         }
         return null;
     }
@@ -904,7 +916,10 @@ public class NicoEnhance extends XposedModule {
                 ((ViewGroup.MarginLayoutParams) p).setMargins(0, 0, dp(ctx, 8), 0);
             }
             return (ViewGroup.LayoutParams) p;
-        } catch (Throwable ignored) { return null; }
+        } catch (Throwable t) {
+            debugLog("createConstraintLayoutParams failed", t);
+            return null;
+        }
     }
 
     private ViewGroup findTitleBar(View view) {
@@ -1056,7 +1071,10 @@ public class NicoEnhance extends XposedModule {
         View row = createFallbackSettingsRow(templateRow.getContext(), templateRow);
         row.setTag(SETTINGS_FALLBACK_ROW_TAG);
         try { pg.addView(row, idx + 1, createFallbackRowLayoutParams(templateRow)); return true; }
-        catch (Throwable ignored) { return false; }
+        catch (Throwable t) {
+            debugLog("insertFallbackRowAfter failed", t);
+            return false;
+        }
     }
 
     private View createFallbackSettingsRow(Context ctx, View templateRow) {
@@ -1342,7 +1360,10 @@ public class NicoEnhance extends XposedModule {
                         return null;
                     });
             return 1;
-        } catch (Throwable ignored) { return 0; }
+        } catch (Throwable t) {
+            debugLog("hookAdControllerMethod failed", t);
+            return 0;
+        }
     }
 
     private int hookInAppAdViewClass(ClassLoader classLoader, ClassNameProvider provider, String className) {
@@ -1531,7 +1552,9 @@ public class NicoEnhance extends XposedModule {
         try {
             Method m = controller.getClass().getMethod("f");
             hideAdView(m.invoke(controller));
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            debugLog("hideControllerContainer failed", t);
+        }
     }
 
     private View getAdEntryView(Object adEntry, Object chain) {
@@ -1554,7 +1577,10 @@ public class NicoEnhance extends XposedModule {
                 } else {
                     continue;
                 }
-            } catch (Throwable ignored) { continue; }
+            } catch (Throwable t) {
+                debugLog("getAdEntryView invoke failed", t);
+                continue;
+            }
             if (result instanceof View) return (View) result;
         }
         return null;
@@ -1564,7 +1590,9 @@ public class NicoEnhance extends XposedModule {
         if (adEntry == null) return;
         try {
             adEntry.getClass().getMethod("h").invoke(adEntry);
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            debugLog("stopAdEntry failed", t);
+        }
     }
 
     private void hideAdView(Object object) {
@@ -1594,7 +1622,9 @@ public class NicoEnhance extends XposedModule {
                     if (listener == null) continue;
                     ft.getMethod("a").invoke(listener);
                     return;
-                } catch (Throwable ignored) {}
+                } catch (Throwable t) {
+                    debugLog("invokePlayerVideoAdSkip failed", t);
+                }
             }
             cur = cur.getSuperclass();
         }
@@ -1684,8 +1714,12 @@ public class NicoEnhance extends XposedModule {
                 Field mf = Field.class.getDeclaredField("modifiers");
                 mf.setAccessible(true);
                 mf.setInt(field, field.getModifiers() & ~0x10);
-            } catch (Throwable ignored) {}
-        } catch (Throwable ignored) {}
+            } catch (Throwable t) {
+                debugLog("makeFieldModifiable modifiers failed", t);
+            }
+        } catch (Throwable t) {
+            debugLog("makeFieldModifiable accessFlags failed", t);
+        }
     }
 
     private int hookSettingUiStatePremium(ClassLoader classLoader, ClassNameProvider provider) {
@@ -1752,7 +1786,9 @@ public class NicoEnhance extends XposedModule {
                             return true;
                         });
                 count++;
-            } catch (Throwable ignored) {}
+            } catch (Throwable t) {
+                debugLog("hookBooleanGettersOnClass " + m.getName() + " failed", t);
+            }
         }
         return count;
     }
@@ -1861,10 +1897,14 @@ public class NicoEnhance extends XposedModule {
                                 return chain.proceed(args);
                             });
                     count++;
-                } catch (Throwable ignored) {}
+                } catch (Throwable t) {
+                    debugLog("hookComposeTextClass method " + m.getName() + " failed", t);
+                }
             }
             if (count > 0) log(Log.INFO, TAG, "Compose text hooks for " + className + ": " + count);
-        } catch (ClassNotFoundException ignored) {}
+        } catch (ClassNotFoundException t) {
+            debugLog("hookComposeTextClass class not found: " + className, t);
+        }
     }
 
     // ── Preference hooks ──
@@ -2097,6 +2137,13 @@ public class NicoEnhance extends XposedModule {
         return null;
     }
 
+    private void debugLog(String msg, Throwable t) {
+        ensureConfigLoaded();
+        if (config.isDebugLogEnabled()) {
+            log(Log.DEBUG, TAG, msg, t);
+        }
+    }
+
     private void ensureConfigLoaded() {
         if (config.isLoaded()) return;
         try {
@@ -2104,7 +2151,9 @@ public class NicoEnhance extends XposedModule {
             Method currentApplication = activityThread.getMethod("currentApplication");
             Object app = currentApplication.invoke(null);
             if (app instanceof Context) config.refresh((Context) app);
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            debugLog("ensureConfigLoaded failed", t);
+        }
     }
 
     private boolean shouldTranslateRuntimeText() {

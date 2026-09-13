@@ -135,11 +135,10 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
 
-                BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = br.readLine()) != null) sb.append(line);
-                br.close();
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) sb.append(line);
 
                 JSONObject release = new JSONObject(sb.toString());
                 String latestTag = release.optString("tag_name", "");
@@ -202,13 +201,11 @@ public class MainActivity extends AppCompatActivity {
      * version because the runtime library name changes between LSPosed variants.
      */
     public boolean isSelfHooked() {
-        try {
-            java.io.InputStream maps = new java.io.FileInputStream("/proc/self/maps");
+        try (java.io.InputStream maps = new java.io.FileInputStream("/proc/self/maps")) {
             byte[] buf = new byte[8192];
             int n;
             StringBuilder sb = new StringBuilder();
             while ((n = maps.read(buf)) > 0) sb.append(new String(buf, 0, n));
-            maps.close();
             String content = sb.toString();
             return content.contains("libxposed")
                     || content.contains("lspd")

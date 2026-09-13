@@ -206,7 +206,8 @@ public final class ClassNameProvider implements Closeable {
                 try {
                     Method m = data.getMethodInstance(classLoader);
                     if (m != null && !methods.contains(m)) methods.add(m);
-                } catch (NoSuchMethodException ignored) {
+                } catch (NoSuchMethodException e) {
+                    Log.v(TAG, "Method not found during DexKit search", e);
                 }
             }
         } catch (Throwable t) {
