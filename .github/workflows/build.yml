@@ -22,12 +22,11 @@ jobs:
       KS_STORE_PASSWORD: ${{ secrets.KS_STORE_PASSWORD }}
       KS_KEY_ALIAS:     ${{ secrets.KS_KEY_ALIAS }}
       KS_KEY_PASSWORD:  ${{ secrets.KS_KEY_PASSWORD }}
-      HAS_KS:           ${{ secrets.KS_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Restore keystore from secret
-        if: env.HAS_KS == 'true'
+        if: secrets.KS_KEYSTORE_BASE64 != ''
         env:
           KS_BASE64: ${{ secrets.KS_KEYSTORE_BASE64 }}
         run: |
@@ -98,7 +97,7 @@ jobs:
           fi
 
       - name: Update rolling release
-        if: github.ref == 'refs/heads/main' && env.HAS_KS == 'true'
+        if: github.ref == 'refs/heads/main' && secrets.KS_KEYSTORE_BASE64 != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
