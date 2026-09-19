@@ -72,11 +72,10 @@ public class MainActivity extends AppCompatActivity {
             moduleStatusText.setText(since == null
                     ? "LSPosed 模块已激活"
                     : "LSPosed 模块已激活\n上次注入时间：" + since);
-            moduleStatusCard.setCardBackgroundColor(getColor(R.color.card_background));
         } else {
             moduleStatusText.setText("LSPosed 模块未激活\n请在 LSPosed 中勾选 niconico 并重启手机");
-            moduleStatusCard.setCardBackgroundColor(getColor(R.color.card_background));
         }
+        moduleStatusCard.setCardBackgroundColor(getColor(R.color.card_background));
     }
 
     private String moduleActiveLastSeen() {
@@ -202,15 +201,17 @@ public class MainActivity extends AppCompatActivity {
      * version because the runtime library name changes between LSPosed variants.
      */
     public boolean isSelfHooked() {
-        try (java.io.InputStream maps = new java.io.FileInputStream("/proc/self/maps")) {
-            byte[] buf = new byte[8192];
-            int n;
-            StringBuilder sb = new StringBuilder();
-            while ((n = maps.read(buf)) > 0) sb.append(new String(buf, 0, n));
-            String content = sb.toString();
-            return content.contains("libxposed")
-                    || content.contains("lspd")
-                    || content.contains("lsposed");
+        // Stream line-by-line and bail out on the first match instead of slurping the whole
+        // (potentially ~100 KB) maps file into memory on every onResume.
+        try (java.io.BufferedReader r = new java.io.BufferedReader(
+                new java.io.InputStreamReader(new java.io.FileInputStream("/proc/self/maps")))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                if (line.contains("libxposed") || line.contains("lspd") || line.contains("lsposed")) {
+                    return true;
+                }
+            }
+            return false;
         } catch (Throwable t) {
             return false;
         }

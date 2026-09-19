@@ -5,8 +5,29 @@
 
 ## [Unreleased]
 
+### Added
+
+- 适配 niconico 9.14.0 混淆类名漂移：广告工厂 `sl.i` → `bm.i`、广告控制器 `tf.l` → `xf.l`、
+  Compose 广告 Banner `hk.c` → `qk.c`、设置会员状态 `ep.y1` → `pp.z1`、资源持有类 `mf.l0` → `of.l0`。
+- Compose 设置项改为 DexKit 指纹定位（`hp.e0` 在 9.14.0 已无 `設定` 字面量），定位失败时优雅降级到
+  Fragment 设置入口；`Function0`/`Unit` 解析优先使用稳定的库名，避免短名漂移后被错误代理。
+
+### Changed
+
+- `StringTranslations` 内部 `AcNode`/`automaton` 更名为 `TrieNode`/`trie`，与实现（普通前缀树）一致。
+
+### Performance
+
+- 配置读取节流：`ModuleConfig.refreshThrottled` 让广告 hook 热路径不再每次全量读 SharedPreferences。
+- 视图树翻译去重：`translatedSubtrees` 记录已处理的 View，父/子 `onAttachedToWindow` 不再重复遍历同一子树。
+- `TranslationRepository.findExactText` 对非日文文本负缓存，避免对同一 UI 文本重复做码点扫描。
+- `MainActivity.isSelfHooked` 改为逐行读取、命中即返回，不再每次 `onResume` 全量载入 `/proc/self/maps`。
+
 ### Fixed
 
+- `TextView.setText(CharSequence)` 命中翻译后保留原 `Spannable` 样式/超链接，不再被替换成纯 `String`。
+- hook 安装逐项隔离：单个 hook 抛异常不再导致同批其余 hook 全部被跳过，失败的 hook 会在下次调用时重试。
+- 清理未使用参数（`getAdEntryView` 的 `chain`、广告移除链路的 `classLoader` 等）。
 - 修复短语匹配器：原 Aho-Corasick 实现 `step()` 的 fail 链为死代码，导致左起最短而非最长匹配，
   重叠短语（如 `フォロー新着`）被拆成两个短语翻译；改为 leftmost-longest 贪心扫描。
 - 修复 `@string/xxx` 字面量泄漏：`strings.properties` 中 123 条值为 `@string/...` 的翻译条目

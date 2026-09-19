@@ -10,6 +10,8 @@ import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.text.SpannableString;
+import android.text.Spanned;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -35,10 +37,13 @@ import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedInterface;
@@ -99,6 +104,9 @@ public class NicoEnhance extends XposedModule {
 
     private static final int MAX_VIEW_DEPTH = 50;
 
+    /** Number of independent app-hook steps; used as a fast "all installed" check. */
+    private static final int APP_HOOK_COUNT = 6;
+
     /**
      * Package-name prefixes for third-party ad SDKs that niconico bundles. Any
      * {@link android.content.Intent} resolved against a class inside these packages is a
@@ -142,9 +150,19 @@ public class NicoEnhance extends XposedModule {
 
     private TranslationRepository repo;
     private final ModuleConfig config = new ModuleConfig();
-    private final AtomicBoolean resourceHooksInstalled = new AtomicBoolean();
-    private boolean appHooksInstalled;
-    private WeakReference<Activity> currentActivity = new WeakReference<>(null);
+    private final Set<String> installedResourceHooks = ConcurrentHashMap.newKeySet();
+    private final Set<String> installedAppHooks = ConcurrentHashMap.newKeySet();
+    private volatile WeakReference<Activity> currentActivity = new WeakReference<>(null);
+
+    /**
+     * ViewGroups whose subtree has already been walked by {@link #translateViewTree}. Prevents
+     * the O(n·depth) re-traversal that happens when every view reports onAttachedToWindow and
+     * each one re-walks its descendants. Entries are weakly held so recycled/GC'd views can be
+     * translated again if they are ever re-created. Only touched on the main thread.
+     */
+    private final Set<View> translatedSubtrees =
+            Collections.newSetFromMap(new WeakHashMap<View, Boolean>());
+
     @Override
     public void onPackageLoaded(PackageLoadedParam param) {
         String pkg = param.getPackageName();
@@ -197,39 +215,56 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private void installResourceHooks() {
-        if (!resourceHooksInstalled.compareAndSet(false, true)) return;
+    /** A single hook-installation step that may fail independently of the others. */
+    private interface HookInstaller {
+        void install() throws Throwable;
+    }
+
+    /**
+     * Run one hook-installation step. Each step is tracked in {@code installed} so a failure
+     * (e.g. a class not yet loadable during {@code onPackageLoaded}) is retried on the next
+     * call, while a success is never re-run. Previously a single throw aborted the whole batch
+     * and the remaining hooks were silently skipped forever.
+     */
+    private void installHookSafely(Set<String> installed, String name, HookInstaller installer) {
+        if (!installed.add(name)) return;
         try {
-            hookStringMethods();
-            hookTextMethods();
-            hookQuantityMethods();
-            hookArrayMethods();
-            hookTypedArrayMethods();
-            hookTextViewMethods();
-            hookViewMethods();
-            hookActivityMethods();
-            hookToastMethods();
-            hookWebViewMethods();
-            log(Log.INFO, TAG, "Resource hooks installed");
+            installer.install();
         } catch (Throwable t) {
-            log(Log.ERROR, TAG, "Failed to install resource hooks", t);
+            installed.remove(name);
+            log(Log.ERROR, TAG, "Failed to install hook " + name, t);
         }
     }
 
+    private void installResourceHooks() {
+        installHookSafely(installedResourceHooks, "string", this::hookStringMethods);
+        installHookSafely(installedResourceHooks, "text", this::hookTextMethods);
+        installHookSafely(installedResourceHooks, "quantity", this::hookQuantityMethods);
+        installHookSafely(installedResourceHooks, "array", this::hookArrayMethods);
+        installHookSafely(installedResourceHooks, "typedArray", this::hookTypedArrayMethods);
+        installHookSafely(installedResourceHooks, "textView", this::hookTextViewMethods);
+        installHookSafely(installedResourceHooks, "view", this::hookViewMethods);
+        installHookSafely(installedResourceHooks, "activity", this::hookActivityMethods);
+        installHookSafely(installedResourceHooks, "toast", this::hookToastMethods);
+        installHookSafely(installedResourceHooks, "webView", this::hookWebViewMethods);
+        log(Log.INFO, TAG, "Resource hooks installed: " + installedResourceHooks);
+    }
+
     private void installAppHooks(ClassLoader classLoader) {
-        if (appHooksInstalled) return;
-        appHooksInstalled = true;
+        if (installedAppHooks.size() >= APP_HOOK_COUNT) return;
         try (ClassNameProvider provider = ClassNameProvider.open(classLoader)) {
-            try {
-                hookNicoSettingsEntry(classLoader, provider);
-                hookAboutAppComposeEntry(classLoader, provider);
-                hookAdRemoval(classLoader, provider);
-                hookComposeTextMethods(classLoader);
-                hookPreferenceMethods(classLoader);
-                hookPremiumUnlock(classLoader, provider);
-            } catch (Throwable t) {
-                log(Log.ERROR, TAG, "Failed to install app hooks", t);
-            }
+            installHookSafely(installedAppHooks, "settingsEntry",
+                    () -> hookNicoSettingsEntry(classLoader, provider));
+            installHookSafely(installedAppHooks, "aboutAppComposeEntry",
+                    () -> hookAboutAppComposeEntry(classLoader, provider));
+            installHookSafely(installedAppHooks, "adRemoval",
+                    () -> hookAdRemoval(provider));
+            installHookSafely(installedAppHooks, "composeText",
+                    () -> hookComposeTextMethods(classLoader));
+            installHookSafely(installedAppHooks, "preference",
+                    () -> hookPreferenceMethods(classLoader));
+            installHookSafely(installedAppHooks, "premiumUnlock",
+                    () -> hookPremiumUnlock(provider));
         }
         writeSelfCheckFlag();
         writeModuleActiveSentinel();
@@ -377,14 +412,14 @@ public class NicoEnhance extends XposedModule {
         hook(TextView.class.getMethod("setText", CharSequence.class))
             .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
             .intercept(chain -> {
-                String t = findExactText((CharSequence) chain.getArg(0));
+                CharSequence t = translateSpanSafe((CharSequence) chain.getArg(0));
                 return t != null ? chain.proceed(new Object[]{t}) : chain.proceed();
             });
 
         hook(TextView.class.getMethod("setText", CharSequence.class, TextView.BufferType.class))
             .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
             .intercept(chain -> {
-                String t = findExactText((CharSequence) chain.getArg(0));
+                CharSequence t = translateSpanSafe((CharSequence) chain.getArg(0));
                 return t != null
                     ? chain.proceed(new Object[]{t, chain.getArg(1)})
                     : chain.proceed();
@@ -393,7 +428,7 @@ public class NicoEnhance extends XposedModule {
         hook(TextView.class.getMethod("setHint", CharSequence.class))
             .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
             .intercept(chain -> {
-                String t = findExactText((CharSequence) chain.getArg(0));
+                CharSequence t = translateSpanSafe((CharSequence) chain.getArg(0));
                 return t != null ? chain.proceed(new Object[]{t}) : chain.proceed();
             });
 
@@ -598,6 +633,31 @@ public class NicoEnhance extends XposedModule {
         return repo.findExactText(source);
     }
 
+    /**
+     * Translate a {@link CharSequence} while preserving any spans (links, colours, styles) it
+     * carries. A plain {@code String} replacement would silently strip them, so when the source
+     * is {@link Spanned} the translated text is wrapped in a {@link SpannableString} and the
+     * original spans are re-applied (clamped to the translated length).
+     *
+     * @return the translated CharSequence, or {@code null} when there is nothing to translate
+     */
+    private CharSequence translateSpanSafe(CharSequence source) {
+        String translated = findExactText(source);
+        if (translated == null) return null;
+        if (!(source instanceof Spanned)) return translated;
+        Spanned spanned = (Spanned) source;
+        Object[] spans = spanned.getSpans(0, source.length(), Object.class);
+        if (spans.length == 0) return translated;
+        SpannableString out = new SpannableString(translated);
+        for (Object span : spans) {
+            int start = spanned.getSpanStart(span);
+            int end = spanned.getSpanEnd(span);
+            if (start < 0 || start > out.length()) continue;
+            out.setSpan(span, start, Math.min(end, out.length()), spanned.getSpanFlags(span));
+        }
+        return out;
+    }
+
     private String translateText(CharSequence source) {
         if (source == null || !shouldTranslateRuntimeText()) return null;
         return repo.translateText(source.toString());
@@ -683,19 +743,22 @@ public class NicoEnhance extends XposedModule {
      * <p>This relies on two version-specific targets: a Compose settings-item renderer class
      * (historically {@code hp.e0} with {@code k(int,Function0,Composer,int,int)} and
      * {@code l(String,Function0,Composer,int,int)} methods) and a {@code R.string} holder
-     * (historically {@code mf.l0} with a {@code config_application_info} field). Both drifted
-     * away after niconico 9.x, so when either lookup fails this hook degrades to a no-op and
-     * the settings entry is provided by {@link #hookNicoSettingsEntry} instead.
+     * (historically {@code mf.l0} / {@code of.l0} with a {@code config_application_info} field).
+     * The renderer drifted away in niconico 9.14.0 (no class references the 設定 literal any
+     * more), so this hook resolves it via DexKit only and degrades to a no-op when not found;
+     * the settings entry is then provided by {@link #hookNicoSettingsEntry} instead.
      */
     private void hookAboutAppComposeEntry(ClassLoader classLoader, ClassNameProvider provider) {
         try {
-            Class<?> function0 = provider.get("qr.a");
+            Class<?> function0 = resolveFunction0(classLoader);
             Class<?> composer = provider.get("androidx.compose.runtime.Composer");
             if (function0 == null || composer == null) {
                 log(Log.WARN, TAG, "Compose settings entry skipped: kotlin/composer classes unavailable");
                 return;
             }
-            Class<?> settingComponents = provider.get("hp.e0", "\u8a2d\u5b9a");
+            // Fingerprint-only lookup: never trust a drifted short name (hp.e0) that may now
+            // point at an unrelated class.
+            Class<?> settingComponents = provider.get(null, "\u8a2d\u5b9a");
             if (settingComponents == null) {
                 log(Log.INFO, TAG, "Compose settings entry skipped: renderer class not found, relying on settings-fragment hook");
                 return;
@@ -713,7 +776,7 @@ public class NicoEnhance extends XposedModule {
             }
             settingTextItemByRes.setAccessible(true);
             settingTextItemByText.setAccessible(true);
-            Class<?> aboutAppResHolder = provider.get("mf.l0", "config_application_info");
+            Class<?> aboutAppResHolder = provider.get("of.l0", "config_application_info");
             if (aboutAppResHolder == null) {
                 log(Log.INFO, TAG, "Compose settings entry skipped: about-app resource holder not found");
                 return;
@@ -756,9 +819,26 @@ public class NicoEnhance extends XposedModule {
         return Proxy.newProxyInstance(classLoader, new Class<?>[]{function0}, handler);
     }
 
+    /**
+     * Resolve the Kotlin {@code Function0} interface used by Compose lambdas. Prefer the
+     * canonical (library) name; only accept a candidate that is actually an interface so a
+     * drifted short name pointing at a concrete class is never proxied.
+     */
+    private Class<?> resolveFunction0(ClassLoader classLoader) {
+        for (String name : new String[]{"kotlin.jvm.functions.Function0", "qr.a"}) {
+            try {
+                Class<?> c = Class.forName(name, false, classLoader);
+                if (c.isInterface()) return c;
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
+    }
+
     private Object findKotlinUnit(ClassLoader classLoader) {
-        String[] candidates = {"cr.j0", "kotlin.Unit"};
-        String[] fields = {"f61931a", "INSTANCE"};
+        // Prefer the stable library name; the obfuscated short name drifted after 9.x.
+        String[] candidates = {"kotlin.Unit", "cr.j0"};
+        String[] fields = {"INSTANCE", "f61931a"};
         for (String cn : candidates) {
             try {
                 Class<?> uc = Class.forName(cn, false, classLoader);
@@ -1257,14 +1337,14 @@ public class NicoEnhance extends XposedModule {
 
     // ── Ad removal ──
 
-    private void hookAdRemoval(ClassLoader classLoader, ClassNameProvider provider) {
+    private void hookAdRemoval(ClassNameProvider provider) {
         int count = 0;
-        count += hookInAppAdFactory(classLoader, provider);
-        count += hookInAppAdController(classLoader, provider);
-        count += hookInAppAdViewClass(classLoader, provider, "jp.nicovideo.android.ui.inappad.InAppAdMobView");
-        count += hookInAppAdViewClass(classLoader, provider, "jp.nicovideo.android.ui.inappad.InAppAdGenerationView");
-        count += hookComposeAdBanner(classLoader, provider);
-        count += hookPlayerVideoAdView(classLoader, provider);
+        count += hookInAppAdFactory(provider);
+        count += hookInAppAdController(provider);
+        count += hookInAppAdViewClass(provider, "jp.nicovideo.android.ui.inappad.InAppAdMobView");
+        count += hookInAppAdViewClass(provider, "jp.nicovideo.android.ui.inappad.InAppAdGenerationView");
+        count += hookComposeAdBanner(provider);
+        count += hookPlayerVideoAdView(provider);
         if (count > 0) {
             log(Log.INFO, TAG, "Ad removal hooks installed: " + count);
         } else {
@@ -1272,19 +1352,19 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookInAppAdFactory(ClassLoader classLoader, ClassNameProvider provider) {
+    private int hookInAppAdFactory(ClassNameProvider provider) {
         int count = 0;
-        Class<?> factoryClass = provider.get("sl.i", "oxInAppAd");
+        Class<?> factoryClass = provider.get("bm.i", "oxInAppAd");
         if (factoryClass != null) {
             count += hookInAppAdFactoryMethods(factoryClass, "known");
         }
         if (count == 0 && provider.bridgeReady()) {
-            count += hookInAppAdFactoryWithDexKit(classLoader, provider);
+            count += hookInAppAdFactoryWithDexKit(provider);
         }
         return count;
     }
 
-    private int hookInAppAdFactoryWithDexKit(ClassLoader classLoader, ClassNameProvider provider) {
+    private int hookInAppAdFactoryWithDexKit(ClassNameProvider provider) {
         int count = 0;
         List<Method> candidates = new ArrayList<>();
         try {
@@ -1335,8 +1415,8 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookInAppAdController(ClassLoader classLoader, ClassNameProvider provider) {
-        Class<?> ctrlClass = provider.get("tf.l", "adUnitId", "nativeAd");
+    private int hookInAppAdController(ClassNameProvider provider) {
+        Class<?> ctrlClass = provider.get("xf.l", "adUnitId", "nativeAd");
         if (ctrlClass == null) return 0;
         int count = 0;
         for (Method m : ctrlClass.getDeclaredMethods()) {
@@ -1366,7 +1446,7 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookInAppAdViewClass(ClassLoader classLoader, ClassNameProvider provider, String className) {
+    private int hookInAppAdViewClass(ClassNameProvider provider, String className) {
         Class<?> adViewClass = provider.get(className);
         if (adViewClass == null) return 0;
         try {
@@ -1414,13 +1494,12 @@ public class NicoEnhance extends XposedModule {
         return null;
     }
 
-    private int hookComposeAdBanner(ClassLoader classLoader, ClassNameProvider provider) {
-        int count = hookKnownComposeAdBanner(classLoader, provider);
-        return count;
+    private int hookComposeAdBanner(ClassNameProvider provider) {
+        return hookKnownComposeAdBanner(provider);
     }
 
-    private int hookKnownComposeAdBanner(ClassLoader classLoader, ClassNameProvider provider) {
-        Class<?> containerClass = provider.get("hk.c", "AdBannerContainer");
+    private int hookKnownComposeAdBanner(ClassNameProvider provider) {
+        Class<?> containerClass = provider.get("qk.c", "AdBannerContainer");
         if (containerClass == null) return 0;
         try {
             int count = 0;
@@ -1449,7 +1528,7 @@ public class NicoEnhance extends XposedModule {
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> {
                         Object adEntry = chain.getArgs().isEmpty() ? null : chain.getArg(0);
-                        View adView = getAdEntryView(adEntry, chain);
+                        View adView = getAdEntryView(adEntry);
                         if (!shouldRemoveAds(adView != null ? adView : adEntry)) return chain.proceed();
                         hideAdView(adView);
                         stopAdEntry(adEntry);
@@ -1462,7 +1541,7 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookPlayerVideoAdView(ClassLoader classLoader, ClassNameProvider provider) {
+    private int hookPlayerVideoAdView(ClassNameProvider provider) {
         Class<?> playerAdClass = provider.get("jp.nicovideo.android.ui.player.panel.PlayerVideoAdvertisementView");
         if (playerAdClass == null) return 0;
         try {
@@ -1538,7 +1617,8 @@ public class NicoEnhance extends XposedModule {
     private boolean shouldRemoveAds(Object source) {
         Context ctx = extractContext(source);
         if (ctx == null) ctx = currentActivity.get();
-        if (ctx != null) config.refresh(ctx);
+        if (ctx != null) config.refreshThrottled(ctx);
+        else ensureConfigLoaded();
         return config.isAdRemovalEnabled();
     }
 
@@ -1557,7 +1637,7 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private View getAdEntryView(Object adEntry, Object chain) {
+    private View getAdEntryView(Object adEntry) {
         if (adEntry == null) return null;
         Class<?> cls = adEntry.getClass();
         Context ctx = extractContext(adEntry);
@@ -1632,12 +1712,12 @@ public class NicoEnhance extends XposedModule {
 
     // ── Premium unlock ──
 
-    private void hookPremiumUnlock(ClassLoader classLoader, ClassNameProvider provider) {
+    private void hookPremiumUnlock(ClassNameProvider provider) {
         int count = 0;
-        count += hookNicoSessionGetter(classLoader, provider);
-        count += hookNicoSessionReturn(classLoader, provider);
-        count += hookSettingUiStatePremium(classLoader, provider);
-        count += hookDataModelPremiumWithDexKit(classLoader, provider);
+        count += hookNicoSessionGetter(provider);
+        count += hookNicoSessionReturn(provider);
+        count += hookSettingUiStatePremium(provider);
+        count += hookDataModelPremiumWithDexKit(provider);
         if (count > 0) {
             log(Log.INFO, TAG, "Premium unlock hooks installed: " + count);
         } else {
@@ -1645,7 +1725,7 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookNicoSessionGetter(ClassLoader classLoader, ClassNameProvider provider) {
+    private int hookNicoSessionGetter(ClassNameProvider provider) {
         try {
             Class<?> sessionClass = provider.get(
                     "jp.co.dwango.niconico.domain.user.NicoSession",
@@ -1666,7 +1746,7 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookNicoSessionReturn(ClassLoader classLoader, ClassNameProvider provider) {
+    private int hookNicoSessionReturn(ClassNameProvider provider) {
         try {
             Class<?> sessionClass = provider.get(
                     "jp.co.dwango.niconico.domain.user.NicoSession",
@@ -1722,9 +1802,9 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
-    private int hookSettingUiStatePremium(ClassLoader classLoader, ClassNameProvider provider) {
+    private int hookSettingUiStatePremium(ClassNameProvider provider) {
         int count = 0;
-        Class<?> uiStateClass = provider.get("ep.y1", "isPremium", "premiumExpirationDateText");
+        Class<?> uiStateClass = provider.get("pp.z1", "isPremium", "premiumExpirationDateText");
         if (uiStateClass == null) return 0;
         try {
             for (Method m : uiStateClass.getDeclaredMethods()) {
@@ -1752,7 +1832,7 @@ public class NicoEnhance extends XposedModule {
         return count;
     }
 
-    private int hookDataModelPremiumWithDexKit(ClassLoader classLoader, ClassNameProvider provider) {
+    private int hookDataModelPremiumWithDexKit(ClassNameProvider provider) {
         if (!provider.bridgeReady()) return 0;
         int count = 0;
         try {
@@ -2191,6 +2271,7 @@ public class NicoEnhance extends XposedModule {
 
     private void translateViewTree(View view, int depth) {
         if (view == null || depth > MAX_VIEW_DEPTH) return;
+        if (!translatedSubtrees.add(view)) return;
         String cd = findExactText(view.getContentDescription());
         if (cd != null) view.setContentDescription(cd);
         if (view instanceof TextView) {

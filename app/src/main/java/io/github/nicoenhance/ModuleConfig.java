@@ -5,6 +5,8 @@ import android.content.SharedPreferences;
 
 final class ModuleConfig {
     static final String PREFS_NAME = "nicoenhance_config";
+    /** Minimum interval between SharedPreferences reads on hot paths (ad hooks, view tree). */
+    private static final long REFRESH_THROTTLE_MS = 500L;
     private static final String KEY_TRANSLATION_ENABLED = "translation_enabled";
     private static final String KEY_RUNTIME_TEXT_TRANSLATION_ENABLED = "runtime_text_translation_enabled";
     private static final String KEY_WEBVIEW_TRANSLATION_ENABLED = "webview_translation_enabled";
@@ -13,6 +15,7 @@ final class ModuleConfig {
     private static final String KEY_PREMIUM_UNLOCK_ENABLED = "premium_unlock_enabled";
 
     private volatile boolean loaded;
+    private volatile long lastRefreshElapsed;
     private volatile boolean translationEnabled = true;
     private volatile boolean runtimeTextTranslationEnabled = true;
     private volatile boolean webViewTranslationEnabled = true;
@@ -29,7 +32,20 @@ final class ModuleConfig {
         adRemovalEnabled = prefs.getBoolean(KEY_AD_REMOVAL_ENABLED, true);
         debugLogEnabled = prefs.getBoolean(KEY_DEBUG_LOG_ENABLED, false);
         premiumUnlockEnabled = prefs.getBoolean(KEY_PREMIUM_UNLOCK_ENABLED, true);
+        lastRefreshElapsed = android.os.SystemClock.elapsedRealtime();
         loaded = true;
+    }
+
+    /**
+     * Throttled variant of {@link #refresh(Context)} for hot paths that would otherwise hit
+     * SharedPreferences on every call (e.g. ad-view hooks fire many times per second). A user
+     * toggling an option in the config dialog still takes effect within {@link #REFRESH_THROTTLE_MS}.
+     */
+    void refreshThrottled(Context context) {
+        if (loaded && android.os.SystemClock.elapsedRealtime() - lastRefreshElapsed < REFRESH_THROTTLE_MS) {
+            return;
+        }
+        refresh(context);
     }
 
     void save(

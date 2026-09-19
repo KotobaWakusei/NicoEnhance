@@ -139,7 +139,12 @@ public class TranslationRepository {
         String cached = exactCache.get(text);
         if (cached != null) return cached.length() == 0 ? null : cached;
         if (exactCache.containsKey(text)) return null;
-        if (!containsJapanese(text)) return null;
+        if (!containsJapanese(text)) {
+            // Negative-cache non-Japanese strings so repeated lookups on the same UI text
+            // (hot Compose/View paths) skip the codepoint scan entirely.
+            putBounded(exactCache, text, "");
+            return null;
+        }
         String translated = phrases.replacePhrases(text);
         putBounded(exactCache, text, translated == null ? "" : translated);
         return translated;

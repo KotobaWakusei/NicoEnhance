@@ -27,7 +27,7 @@ public class StringTranslations {
 
     private final Properties props;
 
-    private volatile AcNode automaton;
+    private volatile TrieNode trie;
 
     public StringTranslations(Properties props) {
         this.props = props;
@@ -75,7 +75,7 @@ public class StringTranslations {
      */
     public String replacePhrases(String source) {
         if (source == null || source.isEmpty()) return null;
-        AcNode root = ensureAutomaton();
+        TrieNode root = ensureTrie();
         if (root == null) return null;
 
         // leftmost-longest greedy scan: at each position try to extend a phrase for as
@@ -87,12 +87,12 @@ public class StringTranslations {
         int i = 0;
         final int n = source.length();
         while (i < n) {
-            AcNode node = root;
+            TrieNode node = root;
             int bestLen = -1;
             String bestValue = null;
             int j = i;
             while (j < n) {
-                AcNode next = node.children.get(source.charAt(j));
+                TrieNode next = node.children.get(source.charAt(j));
                 if (next == null) break;
                 node = next;
                 j++;
@@ -127,35 +127,35 @@ public class StringTranslations {
         }
     }
 
-    private AcNode ensureAutomaton() {
-        AcNode root = automaton;
+    private TrieNode ensureTrie() {
+        TrieNode root = trie;
         if (root != null) return root;
         synchronized (this) {
-            if (automaton != null) return automaton;
+            if (trie != null) return trie;
             List<String> keys = new ArrayList<>(props.stringPropertyNames());
             if (keys.isEmpty()) return null;
-            root = new AcNode();
+            root = new TrieNode();
             for (String key : keys) {
                 String value = props.getProperty(key);
                 if (value == null || key.isEmpty()) continue;
                 insert(root, key, value);
             }
-            automaton = root;
+            trie = root;
             return root;
         }
     }
 
-    private static void insert(AcNode root, String key, String value) {
-        AcNode cur = root;
+    private static void insert(TrieNode root, String key, String value) {
+        TrieNode cur = root;
         for (int i = 0; i < key.length(); i++) {
             char c = key.charAt(i);
-            cur = cur.children.computeIfAbsent(c, k -> new AcNode());
+            cur = cur.children.computeIfAbsent(c, k -> new TrieNode());
         }
         cur.matchValue = value;
     }
 
-    private static final class AcNode {
-        final Map<Character, AcNode> children = new HashMap<>();
+    private static final class TrieNode {
+        final Map<Character, TrieNode> children = new HashMap<>();
         String matchValue;
     }
 }
