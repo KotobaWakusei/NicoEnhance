@@ -1415,6 +1415,12 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
+    /**
+     * {@code xf.l} (was {@code tf.l} in 9.9.0) is the NativeAd loader; its no-arg
+     * {@code a()} (stop/destroy) and {@code e()} (load) methods are neutralised so the ad never
+     * loads. In 9.14.0 it no longer owns a View, so the old {@code hideControllerContainer}
+     * reflection on a no-arg {@code f()} was dead and has been removed.
+     */
     private int hookInAppAdController(ClassNameProvider provider) {
         Class<?> ctrlClass = provider.get("xf.l", "adUnitId", "nativeAd");
         if (ctrlClass == null) return 0;
@@ -1436,7 +1442,6 @@ public class NicoEnhance extends XposedModule {
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> {
                         if (!shouldRemoveAds(chain.getThisObject())) return chain.proceed();
-                        hideControllerContainer(chain.getThisObject());
                         return null;
                     });
             return 1;
@@ -1626,15 +1631,6 @@ public class NicoEnhance extends XposedModule {
         if (source instanceof Context) return (Context) source;
         if (source instanceof View) return ((View) source).getContext();
         return null;
-    }
-
-    private void hideControllerContainer(Object controller) {
-        try {
-            Method m = controller.getClass().getMethod("f");
-            hideAdView(m.invoke(controller));
-        } catch (Throwable t) {
-            debugLog("hideControllerContainer failed", t);
-        }
     }
 
     private View getAdEntryView(Object adEntry) {

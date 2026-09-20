@@ -31,6 +31,8 @@
 - `TextView.setText(CharSequence)` 命中翻译后保留原 `Spannable` 样式/超链接，不再被替换成纯 `String`。
 - hook 安装逐项隔离：单个 hook 抛异常不再导致同批其余 hook 全部被跳过，失败的 hook 会在下次调用时重试。
 - 清理未使用参数（`getAdEntryView` 的 `chain`、广告移除链路的 `classLoader` 等）。
+- 移除 9.14.0 已失效的广告控制器视图隐藏逻辑：控制器 `xf.l` 已变为 NativeAd loader，
+  `xf.h` 不再提供取视图方法，旧的 `getMethod("f")` 反射必然失败。
 - 修复短语匹配器：原 Aho-Corasick 实现 `step()` 的 fail 链为死代码，导致左起最短而非最长匹配，
   重叠短语（如 `フォロー新着`）被拆成两个短语翻译；改为 leftmost-longest 贪心扫描。
 - 修复 `@string/xxx` 字面量泄漏：`strings.properties` 中 123 条值为 `@string/...` 的翻译条目
