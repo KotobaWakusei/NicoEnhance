@@ -35,6 +35,12 @@ public class TranslationRepository {
     private static final int EXACT_CACHE_LIMIT = 2048;
 
     /**
+     * Strings longer than this are translated but never memoised: WebView documents passed to
+     * {@code translateText} can be hundreds of KB and would evict the whole cache on every load.
+     */
+    private static final int CACHEABLE_TEXT_MAX = 256;
+
+    /**
      * Insert into an unbounded numeric/string cache; when it passes {@link #EXACT_CACHE_LIMIT}
      * entries the whole cache is cleared so long-lived UIs (comment streams, dynamic lists)
      * cannot grow memory without bound.
@@ -136,26 +142,27 @@ public class TranslationRepository {
         String text = source.toString();
         String exactHit = exact.get(text);
         if (exactHit != null) return exactHit;
-        String cached = exactCache.get(text);
-        if (cached != null) return cached.length() == 0 ? null : cached;
-        if (exactCache.containsKey(text)) return null;
+        boolean cacheable = text.length() <= CACHEABLE_TEXT_MAX;
+        if (cacheable) {
+            String cached = exactCache.get(text);
+            if (cached != null) return cached.length() == 0 ? null : cached;
+            if (exactCache.containsKey(text)) return null;
+        }
         if (!containsJapanese(text)) {
             // Negative-cache non-Japanese strings so repeated lookups on the same UI text
             // (hot Compose/View paths) skip the codepoint scan entirely.
-            putBounded(exactCache, text, "");
+            if (cacheable) putBounded(exactCache, text, "");
             return null;
         }
         String translated = phrases.replacePhrases(text);
-        putBounded(exactCache, text, translated == null ? "" : translated);
+        if (cacheable) putBounded(exactCache, text, translated == null ? "" : translated);
         return translated;
     }
 
     public String translateText(String source) {
-        if (source == null) return null;
-        String result = exact.get(source);
-        if (result != null) return result;
-        if (!containsJapanese(source)) return null;
-        return phrases.replacePhrases(source);
+        // Identical semantics to findExactText, but reusing it also gives the many short strings
+        // from Compose / preferences / arrays the same bounded memoisation.
+        return findExactText(source);
     }
 
     public String format(String template, Object[] args) {
