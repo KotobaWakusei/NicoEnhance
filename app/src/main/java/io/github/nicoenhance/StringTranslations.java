@@ -2,9 +2,7 @@ package io.github.nicoenhance;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
@@ -25,12 +23,22 @@ public class StringTranslations {
 
     private static final Locale LOCALE = Locale.SIMPLIFIED_CHINESE;
 
-    private final Properties props;
+    /**
+     * Immutable snapshot of the dictionary. {@link Properties} extends the synchronised
+     * {@link java.util.Hashtable}, so every {@code getProperty} takes a monitor; on Compose
+     * hot paths that is pure contention. A plain map read is lock-free.
+     */
+    private final Map<String, String> entries;
 
     private volatile TrieNode trie;
 
     public StringTranslations(Properties props) {
-        this.props = props;
+        Map<String, String> copy = new HashMap<>(Math.max(16, props.size() * 2));
+        for (String name : props.stringPropertyNames()) {
+            String value = props.getProperty(name);
+            if (value != null) copy.put(name, value);
+        }
+        this.entries = copy;
     }
 
     public static StringTranslations empty() {
@@ -44,11 +52,11 @@ public class StringTranslations {
     }
 
     public int size() {
-        return props.size();
+        return entries.size();
     }
 
     public String get(String key) {
-        return props.getProperty(key);
+        return entries.get(key);
     }
 
     /**
@@ -63,7 +71,7 @@ public class StringTranslations {
 
     private String resolve(String key, int depth) {
         if (key == null || depth <= 0) return null;
-        String value = props.getProperty(key);
+        String value = entries.get(key);
         if (value == null) return null;
         if (value.startsWith("@string/")) return resolve(value.substring(8), depth - 1);
         return value;
@@ -132,13 +140,12 @@ public class StringTranslations {
         if (root != null) return root;
         synchronized (this) {
             if (trie != null) return trie;
-            List<String> keys = new ArrayList<>(props.stringPropertyNames());
-            if (keys.isEmpty()) return null;
+            if (entries.isEmpty()) return null;
             root = new TrieNode();
-            for (String key : keys) {
-                String value = props.getProperty(key);
-                if (value == null || key.isEmpty()) continue;
-                insert(root, key, value);
+            for (Map.Entry<String, String> e : entries.entrySet()) {
+                String key = e.getKey();
+                if (key.isEmpty()) continue;
+                insert(root, key, e.getValue());
             }
             trie = root;
             return root;

@@ -155,9 +155,9 @@ public class NicoEnhance extends XposedModule {
     private volatile WeakReference<Activity> currentActivity = new WeakReference<>(null);
 
     /**
-     * ViewGroups whose subtree has already been walked by {@link #translateViewTree}. Prevents
-     * the O(n·depth) re-traversal that happens when every view reports onAttachedToWindow and
-     * each one re-walks its descendants. Entries are weakly held so recycled/GC'd views can be
+     * Views already visited by the {@link #translateAttachedTree} attach pass. Prevents the
+     * O(n·depth) re-traversal that happens when every view reports onAttachedToWindow and each
+     * one re-walks its descendants. Entries are weakly held so recycled/GC'd views can be
      * translated again if they are ever re-created. Only touched on the main thread.
      */
     private final Set<View> translatedSubtrees =
@@ -476,7 +476,7 @@ public class NicoEnhance extends XposedModule {
         hook(oa).setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
             .intercept(chain -> {
                 Object r = chain.proceed();
-                translateViewTree((View) chain.getThisObject());
+                translateAttachedTree((View) chain.getThisObject());
                 return r;
             });
     }
@@ -2265,13 +2265,40 @@ public class NicoEnhance extends XposedModule {
         return changed ? r : orig;
     }
 
+    /**
+     * Translate a view and its descendants. Used by the unconditional walks (Activity
+     * {@code onResume}, Preference binding), which must stay repeatable so a config toggle can
+     * re-translate already-visible text.
+     */
     private void translateViewTree(View view) {
         translateViewTree(view, 0);
     }
 
     private void translateViewTree(View view, int depth) {
         if (view == null || depth > MAX_VIEW_DEPTH) return;
-        if (!translatedSubtrees.add(view)) return;
+        translateView(view);
+        if (view instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) view;
+            for (int i = 0; i < g.getChildCount(); i++) translateViewTree(g.getChildAt(i), depth + 1);
+        }
+    }
+
+    /**
+     * {@code onAttachedToWindow} fires for every view top-down, so an unconditional walk here
+     * would re-translate each subtree once per ancestor (O(n·depth)). Marking visited views
+     * keeps the whole attach pass O(n); later text changes are still handled by the setText
+     * hooks, and the {@code onResume} walk remains unconditional.
+     */
+    private void translateAttachedTree(View view) {
+        if (view == null || !translatedSubtrees.add(view)) return;
+        translateView(view);
+        if (view instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) view;
+            for (int i = 0; i < g.getChildCount(); i++) translateAttachedTree(g.getChildAt(i));
+        }
+    }
+
+    private void translateView(View view) {
         String cd = findExactText(view.getContentDescription());
         if (cd != null) view.setContentDescription(cd);
         if (view instanceof TextView) {
@@ -2280,10 +2307,6 @@ public class NicoEnhance extends XposedModule {
             if (t != null) tv.setText(t);
             String h = findExactText(tv.getHint());
             if (h != null) tv.setHint(h);
-        }
-        if (view instanceof ViewGroup) {
-            ViewGroup g = (ViewGroup) view;
-            for (int i = 0; i < g.getChildCount(); i++) translateViewTree(g.getChildAt(i), depth + 1);
         }
     }
 }

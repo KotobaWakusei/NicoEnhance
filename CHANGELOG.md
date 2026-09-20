@@ -21,7 +21,9 @@
 - 配置读取节流：`ModuleConfig.refreshThrottled` 让广告 hook 热路径不再每次全量读 SharedPreferences。
 - 视图树翻译去重：`translatedSubtrees` 记录已处理的 View，父/子 `onAttachedToWindow` 不再重复遍历同一子树。
 - `TranslationRepository.findExactText` 对非日文文本负缓存，避免对同一 UI 文本重复做码点扫描。
+- `StringTranslations` 用不可变 `HashMap` 快照替换同步的 `Properties` 查找，Compose 热路径的字典查询不再抢 `Hashtable` 监视器锁。
 - `MainActivity.isSelfHooked` 改为逐行读取、命中即返回，不再每次 `onResume` 全量载入 `/proc/self/maps`。
+- `MainActivity` 翻译统计解析（~4k 行 properties）移出主线程，`onCreate` 不再被 I/O 阻塞。
 
 ### Fixed
 

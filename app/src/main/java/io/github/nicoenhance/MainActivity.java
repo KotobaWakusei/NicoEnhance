@@ -92,22 +92,38 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadTranslationStats() {
-        try {
-            Properties sp = new Properties();
-            Properties ep = new Properties();
-            Properties pp = new Properties();
-            sp.load(getAssets().open("translations/zh-CN/strings.properties"));
-            ep.load(getAssets().open("translations/zh-CN/exact.properties"));
-            pp.load(getAssets().open("translations/zh-CN/phrases.properties"));
+        // Parsing ~4k properties lines is I/O + work; keep it off the UI thread so onCreate
+        // does not block on it.
+        new Thread(() -> {
+            String total;
+            String exact;
+            String phrase;
+            try {
+                total = String.valueOf(countEntries("translations/zh-CN/strings.properties"));
+                exact = String.valueOf(countEntries("translations/zh-CN/exact.properties"));
+                phrase = String.valueOf(countEntries("translations/zh-CN/phrases.properties"));
+            } catch (Exception e) {
+                total = "?";
+                exact = "?";
+                phrase = "?";
+            }
+            final String t = total;
+            final String e = exact;
+            final String p = phrase;
+            runOnUiThread(() -> {
+                ((MaterialTextView) findViewById(R.id.statTotal)).setText(t);
+                ((MaterialTextView) findViewById(R.id.statExact)).setText(e);
+                ((MaterialTextView) findViewById(R.id.statPhrase)).setText(p);
+            });
+        }).start();
+    }
 
-            ((MaterialTextView) findViewById(R.id.statTotal)).setText(String.valueOf(sp.size()));
-            ((MaterialTextView) findViewById(R.id.statExact)).setText(String.valueOf(ep.size()));
-            ((MaterialTextView) findViewById(R.id.statPhrase)).setText(String.valueOf(pp.size()));
-        } catch (Exception e) {
-            ((MaterialTextView) findViewById(R.id.statTotal)).setText("?");
-            ((MaterialTextView) findViewById(R.id.statExact)).setText("?");
-            ((MaterialTextView) findViewById(R.id.statPhrase)).setText("?");
+    private int countEntries(String assetPath) throws java.io.IOException {
+        Properties props = new Properties();
+        try (java.io.InputStream in = getAssets().open(assetPath)) {
+            props.load(in);
         }
+        return props.size();
     }
 
     private void checkForUpdates() {
