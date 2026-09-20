@@ -751,26 +751,13 @@ public class NicoEnhance extends XposedModule {
     }
 
     private Class<?> findSettingFragmentClass(ClassLoader classLoader, ClassNameProvider provider) {
-        Class<?> resolved = provider.get(SETTINGS_FRAGMENT_CLASS,
-                "\u8a2d\u5b9a", "\u30a2\u30ab\u30a6\u30f3\u30c8", "\u30d8\u30eb\u30d7", "setting");
-        if (resolved != null) return chooseSettingFragmentCandidate(directClassesIncluding(resolved));
-        return null;
-    }
-
-    private List<Class<?>> directClassesIncluding(Class<?> c) {
-        List<Class<?>> out = new ArrayList<>();
-        out.add(c);
-        return out;
-    }
-
-    private Class<?> chooseSettingFragmentCandidate(List<Class<?>> candidates) {
-        Class<?> fallback = null;
-        for (Class<?> c : candidates) {
-            if (!isFragmentSubclass(c) || findDeclaredOnCreateView(c) == null) continue;
-            if (c.getName().toLowerCase(Locale.ROOT).contains("setting")) return c;
-            if (fallback == null) fallback = c;
-        }
-        return fallback;
+        // The fully-qualified name is stable across niconico 9.x, so load it directly instead of
+        // running a DexKit search. The old 設定/アカウント/ヘルプ fingerprints no longer exist in
+        // 9.14.0 and always fell through to this same name anyway.
+        Class<?> resolved = provider.get(SETTINGS_FRAGMENT_CLASS);
+        if (resolved == null) return null;
+        return isFragmentSubclass(resolved) && findDeclaredOnCreateView(resolved) != null
+                ? resolved : null;
     }
 
     private boolean isFragmentSubclass(Class<?> c) {
