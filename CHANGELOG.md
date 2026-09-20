@@ -33,6 +33,9 @@
 - 清理未使用参数（`getAdEntryView` 的 `chain`、广告移除链路的 `classLoader` 等）。
 - 移除 9.14.0 已失效的广告控制器视图隐藏逻辑：控制器 `xf.l` 已变为 NativeAd loader，
   `xf.h` 不再提供取视图方法，旧的 `getMethod("f")` 反射必然失败。
+- 修复 9.14.0 设置入口：设置页已是纯 Compose（`SettingFragment.onCreateView` 返回
+  `ComposeView`），原有的标题栏/"关于本应用"行 View 查找完全失效；现改为在 Activity 内容区
+  叠加一个 `NicoEnhance` 悬浮按钮（视图 detach 时移除），非 Compose 版本仍走原标题栏注入。
 - 修复短语匹配器：原 Aho-Corasick 实现 `step()` 的 fail 链为死代码，导致左起最短而非最长匹配，
   重叠短语（如 `フォロー新着`）被拆成两个短语翻译；改为 leftmost-longest 贪心扫描。
 - 修复 `@string/xxx` 字面量泄漏：`strings.properties` 中 123 条值为 `@string/...` 的翻译条目

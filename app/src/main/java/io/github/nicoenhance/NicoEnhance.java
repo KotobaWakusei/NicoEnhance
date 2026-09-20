@@ -688,11 +688,66 @@ public class NicoEnhance extends XposedModule {
                     if (result instanceof View) {
                         View root = (View) result;
                         config.refresh(root.getContext());
-                        attachSettingsButtonToTitleBar(root, 0);
+                        if (root.getClass().getName().contains("ComposeView")) {
+                            // niconico 9.14.0+ renders the settings screen entirely in Compose,
+                            // so there is no View title bar / about-row to attach to. Overlay a
+                            // real button on the Activity content instead.
+                            attachComposeSettingsEntry(root);
+                        } else {
+                            attachSettingsButtonToTitleBar(root, 0);
+                        }
                     }
                     return result;
                 });
         log(Log.INFO, TAG, "Settings entry hook installed: " + fragmentClass.getName());
+    }
+
+    /**
+     * Compose fallback for the settings entry: overlay a small "NicoEnhance" button on the
+     * Activity's content view while the settings screen is shown, and remove it again when the
+     * screen is detached. Keeps the Compose tree untouched.
+     */
+    private void attachComposeSettingsEntry(View root) {
+        Activity activity = findActivity(root.getContext());
+        if (activity == null) return;
+        ViewGroup content = activity.findViewById(android.R.id.content);
+        if (content == null) return;
+        if (findTaggedView(content, SETTINGS_BUTTON_TAG) != null) return;
+        Runnable addButton = () -> {
+            if (findTaggedView(content, SETTINGS_BUTTON_TAG) != null) return;
+            Context ctx = root.getContext();
+            if (ctx == null) return;
+            TextView btn = createSettingsEntryButton(ctx);
+            btn.setTag(SETTINGS_BUTTON_TAG);
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, dp(ctx, 40), Gravity.BOTTOM | Gravity.END);
+            lp.setMargins(0, 0, dp(ctx, 16), dp(ctx, 24));
+            try {
+                content.addView(btn, lp);
+            } catch (Throwable t) {
+                debugLog("attachComposeSettingsEntry add failed", t);
+            }
+        };
+        // Covers the case where the view is already attached when we hook (listener won't fire).
+        root.post(addButton);
+        root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+            @Override
+            public void onViewAttachedToWindow(View v) {
+                v.post(addButton);
+            }
+
+            @Override
+            public void onViewDetachedFromWindow(View v) {
+                View btn = findTaggedView(content, SETTINGS_BUTTON_TAG);
+                if (btn != null) {
+                    try {
+                        content.removeView(btn);
+                    } catch (Throwable t) {
+                        debugLog("attachComposeSettingsEntry remove failed", t);
+                    }
+                }
+            }
+        });
     }
 
     private Class<?> findSettingFragmentClass(ClassLoader classLoader, ClassNameProvider provider) {
