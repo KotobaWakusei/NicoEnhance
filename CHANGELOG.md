@@ -23,6 +23,8 @@
 - `TranslationRepository.findExactText` 对非日文文本负缓存，避免对同一 UI 文本重复做码点扫描。
 - `StringTranslations` 用不可变 `HashMap` 快照替换同步的 `Properties` 查找，Compose 热路径的字典查询不再抢 `Hashtable` 监视器锁。
 - `TranslationRepository.translateText` 复用 `findExactText` 的有界缓存；超过 256 字符的大文本（WebView HTML）只翻译不缓存，避免挤爆缓存。
+- 多行字符串的空白归一化匹配：资源里 aapt 存的是 `…。\n時間…`，而词典按源码缩进记为 `…。\n      時間…`，
+  精确匹配一直落空；`getNormalized` 折叠空白后匹配，实测可多命中约 94 条翻译。
 - `MainActivity.isSelfHooked` 改为逐行读取、命中即返回，不再每次 `onResume` 全量载入 `/proc/self/maps`。
 - `MainActivity` 翻译统计解析（~4k 行 properties）移出主线程，`onCreate` 不再被 I/O 阻塞。
 

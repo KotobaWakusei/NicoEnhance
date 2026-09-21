@@ -141,6 +141,9 @@ public class TranslationRepository {
         if (source == null) return null;
         String text = source.toString();
         String exactHit = exact.get(text);
+        // Multi-line resources differ only in whitespace between app and dictionary; retry with
+        // a whitespace-collapsed lookup before falling through to the phrase trie.
+        if (exactHit == null) exactHit = exact.getNormalized(text);
         if (exactHit != null) return exactHit;
         boolean cacheable = text.length() <= CACHEABLE_TEXT_MAX;
         if (cacheable) {

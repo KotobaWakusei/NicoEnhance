@@ -32,6 +32,17 @@ public class StringTranslations {
 
     private volatile TrieNode trie;
 
+    /**
+     * Dictionary keys with runs of ASCII whitespace collapsed to a single space. Built lazily on
+     * first {@link #getNormalized} call.
+     *
+     * <p>Needed because Android resources and the extracted dictionary disagree on multi-line
+     * whitespace: aapt stores {@code "…。\n時間…"} while the dictionary was captured with the
+     * source indentation ({@code "…。\n      時間…"}). An exact lookup misses; the normalised
+     * lookup matches.
+     */
+    private volatile Map<String, String> normalizedEntries;
+
     public StringTranslations(Properties props) {
         Map<String, String> copy = new HashMap<>(Math.max(16, props.size() * 2));
         for (String name : props.stringPropertyNames()) {
@@ -57,6 +68,45 @@ public class StringTranslations {
 
     public String get(String key) {
         return entries.get(key);
+    }
+
+    /**
+     * Whitespace-insensitive lookup: matches {@code key} against dictionary entries after
+     * collapsing runs of ASCII whitespace. Recovers multi-line resources whose indentation
+     * differs between the app and the dictionary. Returns {@code null} when nothing matches.
+     */
+    public String getNormalized(String key) {
+        if (key == null) return null;
+        Map<String, String> map = normalizedEntries;
+        if (map == null) {
+            synchronized (this) {
+                if (normalizedEntries == null) {
+                    Map<String, String> built = new HashMap<>(Math.max(16, entries.size() * 2));
+                    for (Map.Entry<String, String> e : entries.entrySet()) {
+                        built.put(collapseWhitespace(e.getKey()), e.getValue());
+                    }
+                    normalizedEntries = built;
+                }
+                map = normalizedEntries;
+            }
+        }
+        return map.get(collapseWhitespace(key));
+    }
+
+    private static String collapseWhitespace(String s) {
+        StringBuilder sb = new StringBuilder(s.length());
+        boolean pendingSpace = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') {
+                pendingSpace = true;
+                continue;
+            }
+            if (pendingSpace && sb.length() > 0) sb.append(' ');
+            pendingSpace = false;
+            sb.append(c);
+        }
+        return sb.toString();
     }
 
     /**
