@@ -9,7 +9,7 @@
 
 ## 功能
 
-- **界面汉化** — 将 niconico 日文 UI 翻译为简体中文（2267+ 字符串 / 1566+ 精确文本 / 219+ 短语）
+- **界面汉化** — 将 niconico 日文 UI 整句翻译为简体中文（2290+ 资源键 / 1560+ 整句文本，不做词语替换）
 - **广告移除** — 移除应用内广告、Banner 广告、视频广告
 - **WebView 翻译** — 翻译版权页面和贡献者渲染器内容
 - **高级会员解锁** — 解锁 niconico 高级会员功能
@@ -55,7 +55,7 @@
 
 ```
 app/src/main/
-├── assets/translations/zh-CN/   # 翻译资源（strings / exact / phrases）
+├── assets/translations/zh-CN/   # 翻译资源（strings 资源键 / exact 整句）
 ├── java/io/github/nicoenhance/  # 模块源码
 └── resources/META-INF/xposed/   # LSPosed 模块元数据
 ```

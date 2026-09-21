@@ -8,16 +8,13 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * Phrase-level dictionary backed by a compressed trie.
+ * Whole-string dictionary: resource-name → translation (for {@code strings.properties}) or
+ * source text → translation (for {@code exact.properties}).
  *
- * <p>The previous implementation called {@link String#replace(CharSequence, CharSequence)} once
- * per dictionary entry. With 200+ phrases that translates to 200+ intermediate string
- * allocations per call, which on Compose hot paths adds noticeable GC pressure. The trie is
- * walked left to right and, at every position, the longest dictionary phrase starting there is
- * extended as far as possible before emitting it (leftmost-longest greedy).
- *
- * <p>Dictionaries are immutable after the first use, so the trie is built lazily on the
- * first call to {@link #replacePhrases(String)} and cached for subsequent calls.</p>
+ * <p>Lookups are exact, with a whitespace-normalised retry for multi-line resources. There is
+ * deliberately no substring/phrase substitution: replacing individual words rewrote arbitrary
+ * text (user comments, video titles, descriptions) into mixed Japanese/Chinese output. Anything
+ * without an exact full-string entry is left untouched.</p>
  */
 public class StringTranslations {
 
@@ -29,8 +26,6 @@ public class StringTranslations {
      * hot paths that is pure contention. A plain map read is lock-free.
      */
     private final Map<String, String> entries;
-
-    private volatile TrieNode trie;
 
     /**
      * Dictionary keys with runs of ASCII whitespace collapsed to a single space. Built lazily on
@@ -122,58 +117,9 @@ public class StringTranslations {
     private String resolve(String key, int depth) {
         if (key == null || depth <= 0) return null;
         String value = entries.get(key);
-        if (value == null) return null;
+        if (value == null || value.isEmpty()) return null;
         if (value.startsWith("@string/")) return resolve(value.substring(8), depth - 1);
         return value;
-    }
-
-    /**
-     * Replace every dictionary phrase that appears in {@code source}. Returns {@code null} when
-     * nothing matched so callers can cheaply distinguish "no change" from "translated to itself".
-     */
-    public String replacePhrases(String source) {
-        if (source == null || source.isEmpty()) return null;
-        TrieNode root = ensureTrie();
-        if (root == null) return null;
-
-        // leftmost-longest greedy scan: at each position try to extend a phrase for as
-        // far as the trie allows, remember the longest prefix found, then emit it once
-        // the extension fails. This yields the maximal phrase starting at the leftmost
-        // position, which is what replace-style translation intends.
-        StringBuilder out = new StringBuilder(source.length() + 32);
-        int writeStart = 0;
-        int i = 0;
-        final int n = source.length();
-        while (i < n) {
-            TrieNode node = root;
-            int bestLen = -1;
-            String bestValue = null;
-            int j = i;
-            while (j < n) {
-                TrieNode next = node.children.get(source.charAt(j));
-                if (next == null) break;
-                node = next;
-                j++;
-                if (node.matchValue != null) {
-                    bestLen = j - i;
-                    bestValue = node.matchValue;
-                }
-            }
-            if (bestLen > 0) {
-                if (i > writeStart) out.append(source, writeStart, i);
-                out.append(bestValue);
-                writeStart = i + bestLen;
-                i += bestLen;
-            } else {
-                i++;
-            }
-        }
-        if (writeStart < n) {
-            out.append(source, writeStart, n);
-        }
-        String result = out.toString();
-        if (result.length() == source.length() && result.equals(source)) return null;
-        return result;
     }
 
     public String format(String template, Object[] args) {
@@ -185,34 +131,4 @@ public class StringTranslations {
         }
     }
 
-    private TrieNode ensureTrie() {
-        TrieNode root = trie;
-        if (root != null) return root;
-        synchronized (this) {
-            if (trie != null) return trie;
-            if (entries.isEmpty()) return null;
-            root = new TrieNode();
-            for (Map.Entry<String, String> e : entries.entrySet()) {
-                String key = e.getKey();
-                if (key.isEmpty()) continue;
-                insert(root, key, e.getValue());
-            }
-            trie = root;
-            return root;
-        }
-    }
-
-    private static void insert(TrieNode root, String key, String value) {
-        TrieNode cur = root;
-        for (int i = 0; i < key.length(); i++) {
-            char c = key.charAt(i);
-            cur = cur.children.computeIfAbsent(c, k -> new TrieNode());
-        }
-        cur.matchValue = value;
-    }
-
-    private static final class TrieNode {
-        final Map<Character, TrieNode> children = new HashMap<>();
-        String matchValue;
-    }
 }

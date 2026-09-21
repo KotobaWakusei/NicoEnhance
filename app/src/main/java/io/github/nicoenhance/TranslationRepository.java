@@ -22,11 +22,9 @@ public class TranslationRepository {
 
     private static final String STRINGS_PATH = "assets/translations/zh-CN/strings.properties";
     private static final String EXACT_PATH = "assets/translations/zh-CN/exact.properties";
-    private static final String PHRASES_PATH = "assets/translations/zh-CN/phrases.properties";
 
     private final StringTranslations strings;
     private final StringTranslations exact;
-    private final StringTranslations phrases;
 
     private static final Map<Integer, String> stringCache = new ConcurrentHashMap<>();
     private static final Map<Integer, String> pluralCache = new ConcurrentHashMap<>();
@@ -50,10 +48,9 @@ public class TranslationRepository {
         cache.put(key, value);
     }
 
-    public TranslationRepository(StringTranslations strings, StringTranslations exact, StringTranslations phrases) {
+    public TranslationRepository(StringTranslations strings, StringTranslations exact) {
         this.strings = strings;
         this.exact = exact;
-        this.phrases = phrases;
     }
 
     public static TranslationRepository fromModuleApk(String apkPath) {
@@ -61,13 +58,12 @@ public class TranslationRepository {
         try (ZipFile zip = new ZipFile(apkPath)) {
             StringTranslations s = loadAsset(zip, STRINGS_PATH);
             StringTranslations e = loadAsset(zip, EXACT_PATH);
-            StringTranslations p = loadAsset(zip, PHRASES_PATH);
-            Log.i(TAG, "Loaded: " + s.size() + " strings, " + e.size() + " exact, " + p.size() + " phrases");
-            return new TranslationRepository(s, e, p);
+            Log.i(TAG, "Loaded: " + s.size() + " strings, " + e.size() + " exact");
+            return new TranslationRepository(s, e);
         } catch (IOException ex) {
             Log.e(TAG, "Failed to load translations", ex);
             return new TranslationRepository(
-                StringTranslations.empty(), StringTranslations.empty(), StringTranslations.empty());
+                StringTranslations.empty(), StringTranslations.empty());
         }
     }
 
@@ -142,24 +138,22 @@ public class TranslationRepository {
         String text = source.toString();
         String exactHit = exact.get(text);
         // Multi-line resources differ only in whitespace between app and dictionary; retry with
-        // a whitespace-collapsed lookup before falling through to the phrase trie.
+        // a whitespace-collapsed lookup.
         if (exactHit == null) exactHit = exact.getNormalized(text);
-        if (exactHit != null) return exactHit;
+        // An empty dictionary value means "no translation"; treating it as a hit would blank
+        // the view.
+        if (exactHit != null && !exactHit.isEmpty()) return exactHit;
         boolean cacheable = text.length() <= CACHEABLE_TEXT_MAX;
         if (cacheable) {
             String cached = exactCache.get(text);
             if (cached != null) return cached.length() == 0 ? null : cached;
             if (exactCache.containsKey(text)) return null;
         }
-        if (!containsJapanese(text)) {
-            // Negative-cache non-Japanese strings so repeated lookups on the same UI text
-            // (hot Compose/View paths) skip the codepoint scan entirely.
-            if (cacheable) putBounded(exactCache, text, "");
-            return null;
-        }
-        String translated = phrases.replacePhrases(text);
-        if (cacheable) putBounded(exactCache, text, translated == null ? "" : translated);
-        return translated;
+        // Whole-string translations only. Word/phrase substitution was removed because it
+        // rewrote arbitrary text (user comments, titles, descriptions) into mixed
+        // Japanese/Chinese soup; anything without an exact full-string entry is left as-is.
+        if (cacheable) putBounded(exactCache, text, "");
+        return null;
     }
 
     public String translateText(String source) {
@@ -170,24 +164,5 @@ public class TranslationRepository {
 
     public String format(String template, Object[] args) {
         return strings.format(template, args);
-    }
-
-    public static boolean containsJapanese(String text) {
-        for (int i = 0; i < text.length(); ) {
-            int cp = text.codePointAt(i);
-            // Hiragana, Katakana, CJK Unified Ideographs, CJK Compatibility Ideographs,
-            // CJK Extension A/B, CJK Symbols and Punctuation, Fullwidth forms
-            if ((cp >= 0x3040 && cp <= 0x30ff) ||
-                (cp >= 0x31f0 && cp <= 0x31ff) ||
-                (cp >= 0x3400 && cp <= 0x4dbf) ||
-                (cp >= 0x4e00 && cp <= 0x9fff) ||
-                (cp >= 0xf900 && cp <= 0xfaff) ||
-                (cp >= 0x20000 && cp <= 0x2ebef) ||
-                (cp >= 0x3000 && cp <= 0x303f) ||
-                (cp >= 0xff00 && cp <= 0xffef))
-                return true;
-            i += Character.charCount(cp);
-        }
-        return false;
     }
 }

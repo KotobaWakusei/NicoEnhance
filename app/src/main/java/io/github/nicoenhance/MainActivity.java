@@ -97,23 +97,18 @@ public class MainActivity extends AppCompatActivity {
         new Thread(() -> {
             String total;
             String exact;
-            String phrase;
             try {
                 total = String.valueOf(countEntries("translations/zh-CN/strings.properties"));
                 exact = String.valueOf(countEntries("translations/zh-CN/exact.properties"));
-                phrase = String.valueOf(countEntries("translations/zh-CN/phrases.properties"));
             } catch (Exception e) {
                 total = "?";
                 exact = "?";
-                phrase = "?";
             }
             final String t = total;
             final String e = exact;
-            final String p = phrase;
             runOnUiThread(() -> {
                 ((MaterialTextView) findViewById(R.id.statTotal)).setText(t);
                 ((MaterialTextView) findViewById(R.id.statExact)).setText(e);
-                ((MaterialTextView) findViewById(R.id.statPhrase)).setText(p);
             });
         }).start();
     }

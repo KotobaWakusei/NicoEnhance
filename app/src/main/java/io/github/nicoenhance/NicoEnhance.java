@@ -353,8 +353,8 @@ public class NicoEnhance extends XposedModule {
 
     /**
      * The {@code plurals.} dictionary section is currently empty, so exact-quantity lookups
-     * always miss. Degrade gracefully: if the result still contains Japanese, translate the
-     * readable text via phrases/exact without re-substituting count placeholders.
+     * always miss. Degrade gracefully: if the whole result has an exact translation, use it;
+     * otherwise leave the original untouched (no word substitution).
      */
     private Object translateQuantityFallback(Object original) {
         if (!(original instanceof CharSequence)) return original;
