@@ -105,17 +105,20 @@ jobs:
           set -e
           APK="app/build/outputs/apk/release/app-release.apk"
           RELEASE_TAG="NicoEnhance"
+          TITLE="NicoEnhance - $(date +%Y-%m-%d)"
           if gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            # NOTE: `gh release edit` has no --generate-notes flag (only `create` does);
+            # passing it fails with "unknown flag" and used to be masked by `|| true`,
+            # which silently left the title stale.
             gh release edit "$RELEASE_TAG" \
               --repo "${{ github.repository }}" \
-              --title "NicoEnhance - $(date +%Y-%m-%d)" \
-              --generate-notes || true
+              --title "$TITLE"
             gh release upload "$RELEASE_TAG" "$APK" \
               --repo "${{ github.repository }}" \
-              --clobber || true
+              --clobber
           else
             gh release create "$RELEASE_TAG" "$APK" \
               --repo "${{ github.repository }}" \
-              --title "NicoEnhance - $(date +%Y-%m-%d)" \
+              --title "$TITLE" \
               --generate-notes
           fi
