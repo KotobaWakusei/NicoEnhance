@@ -44,6 +44,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedInterface;
@@ -717,7 +718,7 @@ public class NicoEnhance extends XposedModule {
             if (findTaggedView(content, SETTINGS_BUTTON_TAG) != null) return;
             Context ctx = root.getContext();
             if (ctx == null) return;
-            TextView btn = createSettingsEntryButton(ctx);
+            View btn = createSettingsEntryButton(ctx);
             btn.setTag(SETTINGS_BUTTON_TAG);
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, dp(ctx, 40), Gravity.BOTTOM | Gravity.END);
