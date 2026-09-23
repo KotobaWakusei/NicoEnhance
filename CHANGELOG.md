@@ -15,6 +15,9 @@
 
 ### Changed
 
+- **应用包名改为 `io.github.kotobawakusei.nicoenhance`**：满足 LSPosed 模块仓库
+  `io.github.<用户名>.<应用>` 的归属校验（原 `io.github.nicoenhance` 被判定为无效包名）。
+  Java namespace 保持 `io.github.nicoenhance` 不变；已安装旧包名的用户需卸载后重装。
 - **翻译改为整句匹配**：移除短语/词语替换引擎（`phrases.properties` 及前缀树），
   不再把任意日文文本里的词（`設定`/`動画`/`検索`…）逐个替换——那会把用户评论、视频标题、
   简介等拼成中日混杂的垃圾。现在只翻译与词典**整串相等**（含空白归一化）的文本，

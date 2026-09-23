@@ -11,12 +11,13 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.nicoenhance"
+        // Must follow io.github.<github-username>.<app> for LSPosed repo ownership checks.
+        applicationId = "io.github.kotobawakusei.nicoenhance"
         minSdk = 29
         targetSdk = 36
         // 可在 CI 中用 -PversionName=... -PversionCode=... 覆盖（tag 驱动发布）
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 5
-        versionName = (project.findProperty("versionName") as String?) ?: "1.0.3"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 6
+        versionName = (project.findProperty("versionName") as String?) ?: "1.2.0"
     }
 
     signingConfigs {

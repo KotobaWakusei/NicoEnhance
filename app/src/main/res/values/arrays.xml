@@ -2,6 +2,6 @@
 <resources>
     <string-array name="xposedscope">
         <item>jp.nicovideo.android</item>
-        <item>io.github.nicoenhance</item>
+        <item>io.github.kotobawakusei.nicoenhance</item>
     </string-array>
 </resources>

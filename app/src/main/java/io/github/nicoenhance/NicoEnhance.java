@@ -64,7 +64,7 @@ public class NicoEnhance extends XposedModule {
 
     private static final String TAG = "NicoEnhance";
     private static final String TARGET = "jp.nicovideo.android";
-    private static final String MODULE = "io.github.nicoenhance";
+    private static final String MODULE = "io.github.kotobawakusei.nicoenhance";
     private static final String COPYRIGHT_ASSET_URL = "file:///android_asset/copyright/copyright.html";
     private static final String COPYRIGHT_BASE_URL = "file:///android_asset/copyright/";
     private static final String SUPPORTER_RENDERER_ASSET_URL = "file:///android_asset/supporter_renderer/index.html";
