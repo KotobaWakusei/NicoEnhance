@@ -11,6 +11,7 @@ import androidx.cardview.widget.CardView;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textview.MaterialTextView;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -22,7 +23,7 @@ import java.util.Properties;
 public class MainActivity extends AppCompatActivity {
 
     private static final String GITHUB_REPO = "https://github.com/KotobaWakusei/NicoEnhance";
-    private static final String RELEASES_API = "https://api.github.com/repos/KotobaWakusei/NicoEnhance/releases/latest";
+    private static final String RELEASES_API = "https://api.github.com/repos/KotobaWakusei/NicoEnhance/releases?per_page=30";
 
     private MaterialTextView updateStatus;
     private MaterialTextView moduleStatusText;
@@ -73,7 +74,11 @@ public class MainActivity extends AppCompatActivity {
                     ? "LSPosed 模块已激活"
                     : "LSPosed 模块已激活\n上次注入时间：" + since);
         } else {
-            moduleStatusText.setText("LSPosed 模块未激活\n请在 LSPosed 中勾选 niconico 并重启手机");
+            moduleStatusText.setText("LSPosed 模块未激活\n"
+                    + "改包名后在 LSPosed 中是一个全新的、默认关闭的模块：\n"
+                    + "1. 启用 io.github.kotobawakusei.nicoenhance\n"
+                    + "2. 确认作用域包含 niconico\n"
+                    + "3. 重启手机（或强制停止 niconico 后重开）");
         }
         moduleStatusCard.setCardBackgroundColor(getColor(R.color.card_background));
     }
@@ -150,8 +155,17 @@ public class MainActivity extends AppCompatActivity {
                     String line;
                     while ((line = br.readLine()) != null) sb.append(line);
 
-                    JSONObject release = new JSONObject(sb.toString());
-                    String latestTag = release.optString("tag_name", "");
+                    // releases/latest would return the rolling "NicoEnhance" release (marked
+                    // Latest, tag is not a version). Pick the newest release whose tag is a
+                    // real version instead; the list is ordered newest-first.
+                    JSONArray releases = new JSONArray(sb.toString());
+                    String latestTag = "";
+                    for (int i = 0; i < releases.length(); i++) {
+                        JSONObject release = releases.getJSONObject(i);
+                        if (release.optBoolean("draft", false) || release.optBoolean("prerelease", false)) continue;
+                        String tag = release.optString("tag_name", "");
+                        if (tag.matches("(?i)v?\\d+(\\.\\d+)+.*")) { latestTag = tag; break; }
+                    }
 
                     getPreferences(MODE_PRIVATE).edit().putLong("last_update_check", System.currentTimeMillis()).apply();
 
@@ -168,7 +182,10 @@ public class MainActivity extends AppCompatActivity {
                 }
             } catch (Exception e) {
                 String msg = e.getMessage();
-                runOnUiThread(() -> updateStatus.setText("检查失败" + (msg != null ? ": " + msg : "")));
+                String type = e.getClass().getSimpleName();
+                runOnUiThread(() -> updateStatus.setText(
+                        "检查失败: " + type + (msg != null ? "\n" + msg : "")
+                                + "\n（需要能访问 api.github.com）"));
             } finally {
                 if (conn != null) conn.disconnect();
             }
@@ -199,17 +216,16 @@ public class MainActivity extends AppCompatActivity {
 
     public boolean isModuleActive() {
         if (isSelfHooked()) return true;
-        if (lsposedMarkerExists()) return true;
-        if (rootLspDirExists()) return true;
         if (moduleActiveSentinelExists()) return true;
         if (moduleActiveMarkerFileExists()) return true;
         return false;
     }
 
     /**
-     * Best signal: if any LSPosed-related shared library mapped into this process, the
-     * niconico process is hosted by LSPosed and our hooks ran. We probe by name rather than
-     * version because the runtime library name changes between LSPosed variants.
+     * Primary signal: if any LSPosed-related shared library is mapped into this process, the
+     * module's own process was injected by LSPosed (the module is enabled and its own package
+     * is in the static scope). We probe by name rather than version because the runtime
+     * library name changes between LSPosed variants.
      */
     public boolean isSelfHooked() {
         // Stream line-by-line and bail out on the first match instead of slurping the whole
@@ -226,18 +242,6 @@ public class MainActivity extends AppCompatActivity {
         } catch (Throwable t) {
             return false;
         }
-    }
-
-    private boolean lsposedMarkerExists() {
-        String sandbox = android.os.Environment.getDataDirectory().getAbsolutePath();
-        java.io.File f = new java.io.File(sandbox + "/adrive/lspd/module_enabled");
-        return f.exists();
-    }
-
-    private boolean rootLspDirExists() {
-        return new java.io.File("/data/adb/lspd").exists()
-                || new java.io.File("/data/adb/lsp/modules").exists()
-                || new java.io.File("/data/user_de/0/org.lsposed.manager").exists();
     }
 
     /**
