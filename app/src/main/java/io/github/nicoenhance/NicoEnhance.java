@@ -164,7 +164,7 @@ public class NicoEnhance extends XposedModule {
     private final Set<View> translatedSubtrees =
             Collections.newSetFromMap(new WeakHashMap<View, Boolean>());
 
-@Override
+    @Override
     public void onPackageLoaded(PackageLoadedParam param) {
         String pkg = param.getPackageName();
         if (TARGET.equals(pkg)) {
@@ -180,7 +180,6 @@ public class NicoEnhance extends XposedModule {
         } else if (MODULE.equals(pkg)) {
             installSelfHook();
         }
-    }
     }
 
     private void installSelfHook() {
