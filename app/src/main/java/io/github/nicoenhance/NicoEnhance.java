@@ -171,6 +171,7 @@ public class NicoEnhance extends XposedModule {
             log(Log.INFO, TAG, "NicoEnhance: package loaded for " + TARGET);
             if (repo == null) repo = TranslationRepository.fromModuleApk(getModuleApplicationInfo().sourceDir);
             installResourceHooks();
+            installAppHooks(param.getClassLoader());
         } else if (MODULE.equals(pkg)) {
             installSelfHook();
         }
