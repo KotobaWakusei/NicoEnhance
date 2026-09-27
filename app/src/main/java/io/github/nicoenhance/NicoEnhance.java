@@ -164,17 +164,23 @@ public class NicoEnhance extends XposedModule {
     private final Set<View> translatedSubtrees =
             Collections.newSetFromMap(new WeakHashMap<View, Boolean>());
 
-    @Override
+@Override
     public void onPackageLoaded(PackageLoadedParam param) {
         String pkg = param.getPackageName();
         if (TARGET.equals(pkg)) {
             log(Log.INFO, TAG, "NicoEnhance: package loaded for " + TARGET);
             if (repo == null) repo = TranslationRepository.fromModuleApk(getModuleApplicationInfo().sourceDir);
             installResourceHooks();
-            installAppHooks(param.getClassLoader());
+            try {
+                Method m = param.getClass().getMethod("getClassLoader");
+                installAppHooks((ClassLoader) m.invoke(param));
+            } catch (Exception e) {
+                log(Log.WARN, TAG, "Failed to get ClassLoader from PackageLoadedParam, will retry onPackageReady", e);
+            }
         } else if (MODULE.equals(pkg)) {
             installSelfHook();
         }
+    }
     }
 
     private void installSelfHook() {
