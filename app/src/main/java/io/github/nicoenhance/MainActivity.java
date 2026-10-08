@@ -27,6 +27,7 @@ public class MainActivity extends AppCompatActivity {
 
     private MaterialTextView updateStatus;
     private MaterialTextView moduleStatusText;
+    private android.view.View statusDot;
     private CardView moduleStatusCard;
     private String currentVersion;
 
@@ -44,6 +45,7 @@ public class MainActivity extends AppCompatActivity {
         updateStatus = findViewById(R.id.updateStatus);
         moduleStatusText = findViewById(R.id.statusText);
         moduleStatusCard = findViewById(R.id.statusCard);
+        statusDot = findViewById(R.id.statusDot);
 
         loadTranslationStats();
         setupClickListeners();

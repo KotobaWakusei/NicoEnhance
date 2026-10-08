@@ -1,9 +1,8 @@
-name: Build Release APK
+name: Build and Publish Release
 
 on:
   push:
     branches: [ main ]
-    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -12,21 +11,26 @@ permissions:
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: nicoenhance-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
       KS_STORE_PASSWORD: ${{ secrets.KS_STORE_PASSWORD }}
-      KS_KEY_ALIAS:     ${{ secrets.KS_KEY_ALIAS }}
-      KS_KEY_PASSWORD:  ${{ secrets.KS_KEY_PASSWORD }}
-      HAS_KS:           ${{ secrets.KS_KEYSTORE_BASE64 != '' }}
-    steps:
-      - uses: actions/checkout@v4
+      KS_KEY_ALIAS: ${{ secrets.KS_KEY_ALIAS }}
+      KS_KEY_PASSWORD: ${{ secrets.KS_KEY_PASSWORD }}
+      HAS_KS: ${{ secrets.KS_KEYSTORE_BASE64 != '' }}
 
-      - name: Restore keystore from secret
+    steps:
+      - name: Checkout with tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore keystore
         if: env.HAS_KS == 'true'
         env:
           KS_BASE64: ${{ secrets.KS_KEYSTORE_BASE64 }}
@@ -47,78 +51,72 @@ jobs:
           gradle-version: 8.9
           validate-wrappers: false
 
-      - name: Grant execute permission for gradlew
+      - name: Grant execute permission
         run: chmod +x gradlew
 
-      - name: Derive version from git tag
+      - name: Calculate next version
         id: version
+        shell: bash
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-            VER="${TAG#v}"
-            # 语义化版本 -> versionCode: 1.0.4 => 10004
-            IFS='.' read -r MAJOR MINOR PATCH <<< "${VER}"
-            CODE=$(( MAJOR * 10000 + MINOR * 100 + PATCH ))
-            echo "version_name=${VER}" >> "$GITHUB_OUTPUT"
-            echo "version_code=${CODE}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+
+          latest="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n1)"
+          if [[ "$latest" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+          else
+            major=1
+            minor=2
+            patch=0
           fi
 
-      - name: Build Release APK
-        run: |
-          ARGS=()
-          if [[ -n "${{ steps.version.outputs.version_name }}" ]]; then
-            ARGS+=("-PversionName=${{ steps.version.outputs.version_name }}")
-            ARGS+=("-PversionCode=${{ steps.version.outputs.version_code }}")
-          fi
-          ./gradlew assembleRelease "${ARGS[@]}"
+          patch=$((patch + 1))
+          version="${major}.${minor}.${patch}"
+          code=$((major * 10000 + minor * 100 + patch))
 
-      - name: Upload APK as artifact
+          echo "version_name=$version" >> "$GITHUB_OUTPUT"
+          echo "version_code=$code" >> "$GITHUB_OUTPUT"
+          echo "Next release: v$version (versionCode=$code)"
+
+      - name: Build release APK
+        run: |
+          ./gradlew assembleRelease \
+            -PversionName="${{ steps.version.outputs.version_name }}" \
+            -PversionCode="${{ steps.version.outputs.version_code }}"
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NicoEnhance-${{ github.sha }}
+          name: NicoEnhance-v${{ steps.version.outputs.version_name }}
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish tagged release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Remove previous releases
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
-          APK="app/build/outputs/apk/release/app-release.apk"
-          TAG="${GITHUB_REF#refs/tags/}"
-          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" --repo "${{ github.repository }}" --clobber || true
-          else
-            gh release create "$TAG" "$APK" \
-              --repo "${{ github.repository }}" \
-              --title "$TAG" \
-              --generate-notes
-          fi
+          set -euo pipefail
+          gh release list --repo "${{ github.repository }}" --limit 100 --json tagName --jq '.[].tagName' |
+          while IFS= read -r tag; do
+            [[ -z "$tag" ]] && continue
+            echo "Deleting old release: $tag"
+            gh release delete "$tag" --repo "${{ github.repository }}" --yes --cleanup-tag
+          done
 
-      - name: Update rolling release
-        if: github.ref == 'refs/heads/main' && env.HAS_KS == 'true'
+      - name: Create the new release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
-          APK="app/build/outputs/apk/release/app-release.apk"
-          RELEASE_TAG="NicoEnhance"
-          TITLE="NicoEnhance - $(date +%Y-%m-%d)"
-          if gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            # NOTE: `gh release edit` has no --generate-notes flag (only `create` does);
-            # passing it fails with "unknown flag" and used to be masked by `|| true`,
-            # which silently left the title stale.
-            gh release edit "$RELEASE_TAG" \
-              --repo "${{ github.repository }}" \
-              --title "$TITLE"
-            gh release upload "$RELEASE_TAG" "$APK" \
-              --repo "${{ github.repository }}" \
-              --clobber
-          else
-            gh release create "$RELEASE_TAG" "$APK" \
-              --repo "${{ github.repository }}" \
-              --title "$TITLE" \
-              --generate-notes
-          fi
+          set -euo pipefail
+          tag="v${{ steps.version.outputs.version_name }}"
+          apk="app/build/outputs/apk/release/app-release.apk"
+
+          gh release create "$tag" "$apk" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "NicoEnhance $tag" \
+            --generate-notes \
+            --latest
+
