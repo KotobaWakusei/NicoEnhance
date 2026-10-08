@@ -54,6 +54,19 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
+      - name: Remove previous releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release list --repo "${{ github.repository }}" --limit 100 --json tagName --jq '.[].tagName' |
+          while IFS= read -r tag; do
+            [[ -z "$tag" ]] && continue
+            echo "Deleting old release: $tag"
+            gh release delete "$tag" --repo "${{ github.repository }}" --yes --cleanup-tag
+          done
+
+
       - name: Calculate next version
         id: version
         shell: bash
@@ -67,8 +80,8 @@ jobs:
             patch="${BASH_REMATCH[3]}"
           else
             major=1
-            minor=2
-            patch=0
+            minor=0
+            patch=-1
           fi
 
           patch=$((patch + 1))
@@ -78,6 +91,7 @@ jobs:
           echo "version_name=$version" >> "$GITHUB_OUTPUT"
           echo "version_code=$code" >> "$GITHUB_OUTPUT"
           echo "Next release: v$version (versionCode=$code)"
+
 
       - name: Build release APK
         run: |
