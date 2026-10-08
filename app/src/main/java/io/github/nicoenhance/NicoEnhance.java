@@ -28,9 +28,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -97,6 +95,7 @@ public class NicoEnhance extends XposedModule {
 
     /** Number of independent app-hook steps; used as a fast "all installed" check. */
     private static final int APP_HOOK_COUNT = 5;
+    private static final int MAX_VIEW_DEPTH = 32;
 
     /**
      * Package-name prefixes for third-party ad SDKs that niconico bundles. Any
@@ -674,7 +673,8 @@ public class NicoEnhance extends XposedModule {
                             // real button on the Activity content instead.
                             attachComposeSettingsEntry(root);
                         } else {
-                            attachSettingsButtonToTitleBar(root, 0);
+                            // 9.14.x uses Compose for the settings screen; do not touch legacy View title bars.
+                            log(Log.INFO, TAG, "Non-Compose settings view detected; legacy entry injection skipped");
                         }
                     }
                     return result;
@@ -738,148 +738,6 @@ public class NicoEnhance extends XposedModule {
             return fragmentClass.getDeclaredMethod("onCreateView", LayoutInflater.class, ViewGroup.class, Bundle.class);
         } catch (NoSuchMethodException e) {
             return null;
-        }
-    }
-
-    /**
-     * Attempt to inject a "NicoEnhance" entry next to the Compose-rendered "About this app"
-     * row on the settings screen.
-     *
-     * <p>This relies on two version-specific targets: a Compose settings-item renderer class
-     * (historically {@code hp.e0} with {@code k(int,Function0,Composer,int,int)} and
-     * {@code l(String,Function0,Composer,int,int)} methods) and a {@code R.string} holder
-     * (historically {@code mf.l0} / {@code of.l0} with a {@code config_application_info} field).
-     * The renderer drifted away in niconico 9.14.0 (no class references the 設定 literal any
-     * more), so this hook resolves it via DexKit only and degrades to a no-op when not found;
-     * the settings entry is then provided by {@link #hookNicoSettingsEntry} instead.
-     */
-    private void hookAboutAppComposeEntry(ClassLoader classLoader, ClassNameProvider provider) {
-        try {
-            Class<?> function0 = resolveFunction0(classLoader);
-            Class<?> composer = provider.get("androidx.compose.runtime.Composer");
-            if (function0 == null || composer == null) {
-                log(Log.WARN, TAG, "Compose settings entry skipped: kotlin/composer classes unavailable");
-                return;
-            }
-            // Fingerprint-only lookup: never trust a drifted short name (hp.e0) that may now
-            // point at an unrelated class.
-            Class<?> settingComponents = provider.get(null, "\u8a2d\u5b9a");
-            if (settingComponents == null) {
-                log(Log.INFO, TAG, "Compose settings entry skipped: renderer class not found, relying on settings-fragment hook");
-                return;
-            }
-            Method settingTextItemByRes;
-            Method settingTextItemByText;
-            try {
-                settingTextItemByRes = settingComponents.getDeclaredMethod(
-                        "k", int.class, function0, composer, int.class, int.class);
-                settingTextItemByText = settingComponents.getDeclaredMethod(
-                        "l", String.class, function0, composer, int.class, int.class);
-            } catch (NoSuchMethodException e) {
-                log(Log.INFO, TAG, "Compose settings entry skipped: k/l method signature mismatch on " + settingComponents.getName());
-                return;
-            }
-            settingTextItemByRes.setAccessible(true);
-            settingTextItemByText.setAccessible(true);
-            Class<?> aboutAppResHolder = provider.get("of.l0", "config_application_info");
-            if (aboutAppResHolder == null) {
-                log(Log.INFO, TAG, "Compose settings entry skipped: about-app resource holder not found");
-                return;
-            }
-            int aboutAppTitleRes = aboutAppResHolder.getField("config_application_info").getInt(null);
-            Object nauxClick = createNauxiliaryClickCallback(function0, classLoader);
-            hook(settingTextItemByRes)
-                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-.intercept(chain -> {
-                        Object result = chain.proceed();
-                        if ((Integer) chain.getArg(0) == aboutAppTitleRes) {
-                            try {
-                                settingTextItemByText.invoke(null, SETTINGS_ENTRY_TITLE, nauxClick, chain.getArg(2), 0, 0);
-                            } catch (Throwable t) {
-                                debugLog("Compose settings entry insert failed", t);
-                            }
-                        }
-                        return result;
-                    });
-            log(Log.INFO, TAG, "Compose settings entry hook installed on " + settingComponents.getName());
-        } catch (Throwable t) {
-            log(Log.WARN, TAG, "Failed to hook Compose settings entry", t);
-        }
-    }
-
-    private Object createNauxiliaryClickCallback(Class<?> function0, ClassLoader classLoader) {
-        Object unit = findKotlinUnit(classLoader);
-        InvocationHandler handler = (proxy, method, args) -> {
-            String name = method.getName();
-            if ("invoke".equals(name) && method.getParameterTypes().length == 0) {
-                Activity a = currentActivity.get();
-                if (a != null && !a.isFinishing()) a.runOnUiThread(() -> showConfigDialog(a));
-                return unit;
-            }
-            if ("toString".equals(name)) return "NicoEnhanceSettingsClick";
-            if ("hashCode".equals(name)) return System.identityHashCode(proxy);
-            if ("equals".equals(name)) return proxy == args[0];
-            return unit;
-        };
-        return Proxy.newProxyInstance(classLoader, new Class<?>[]{function0}, handler);
-    }
-
-    /**
-     * Resolve the Kotlin {@code Function0} interface used by Compose lambdas. Prefer the
-     * canonical (library) name; only accept a candidate that is actually an interface so a
-     * drifted short name pointing at a concrete class is never proxied.
-     */
-    private Class<?> resolveFunction0(ClassLoader classLoader) {
-        for (String name : new String[]{"kotlin.jvm.functions.Function0", "qr.a"}) {
-            try {
-                Class<?> c = Class.forName(name, false, classLoader);
-                if (c.isInterface()) return c;
-            } catch (Throwable ignored) {
-            }
-        }
-        return null;
-    }
-
-    private Object findKotlinUnit(ClassLoader classLoader) {
-        // Prefer the stable library name; the obfuscated short name drifted after 9.x.
-        String[] candidates = {"kotlin.Unit", "cr.j0"};
-        String[] fields = {"INSTANCE", "f61931a"};
-        for (String cn : candidates) {
-            try {
-                Class<?> uc = Class.forName(cn, false, classLoader);
-                for (String fn : fields) {
-                    try { return uc.getField(fn).get(null); } catch (NoSuchFieldException e) {
-                        debugLog("Kotlin Unit field not found: " + fn, e);
-                    }
-                }
-            } catch (Throwable t) {
-                debugLog("Kotlin Unit class not found: " + cn, t);
-            }
-        }
-        return null;
-    }
-
-    private void attachSettingsButtonToTitleBar(View root, int attempt) {
-        Context ctx = root.getContext();
-        if (ctx == null) return;
-        if (findTaggedView(root, SETTINGS_BUTTON_TAG) != null) return;
-        Activity activity = findActivity(ctx);
-        View decor = activity != null ? activity.getWindow().getDecorView() : root;
-        if (findTaggedView(decor, SETTINGS_BUTTON_TAG) != null) return;
-        ViewGroup titleBar = findSettingsTitleContainer(decor);
-        if (titleBar == null) titleBar = findSettingsTitleContainer(root);
-        if (titleBar == null) titleBar = findTitleBar(root);
-        if (titleBar == null) titleBar = findTitleBar(decor);
-        if (titleBar != null) {
-            View button = createSettingsEntryButton(ctx);
-            button.setTag(SETTINGS_BUTTON_TAG);
-            addButtonToTitleBar(titleBar, button);
-            return;
-        }
-        if (attempt < 8) {
-            root.postDelayed(() -> attachSettingsButtonToTitleBar(root, attempt + 1), 150);
-        } else if (!attachAboutAppFallback(root)) {
-            log(Log.WARN, TAG, "Settings title bar and about-app row not found; entry skipped");
         }
     }
 
