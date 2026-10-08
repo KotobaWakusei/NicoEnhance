@@ -113,32 +113,15 @@ public class NicoEnhance extends XposedModule {
      * a list edit in {@link #installAdActivityBlockHook()}.
      */
     private static final String[] AD_SDK_PACKAGE_PREFIXES = new String[]{
-            "com.bytedance.", "com.pangle.", "com.bykv.",
-            "jp.fluct.",     "com.fluct.",
-            "com.five_corp.", "com.five.",
-            "com.pubmatic.",  "com.pob.", "com.openwrap.",
-            "com.inmobi.",
-            "com.google.android.gms.ads.",
-            "com.google.android.ads.",
-            "com.millennialmedia.",
-            "com.mopub.",       "com.mopub.mobileads.",
-            "com.ironsource.",  "com.supersonic.",
-            "com.applovin.",    "com.applvn.",
-            "com.facebook.",    "com.facebook.ads.",
-            "com.unity3d.",     "com.unity3d.ads.",
-            "com.taboola.",     "com.outbrain.",
-            "com.chartbeat.",
-            "com.vungle.",      "com.vungela.",
-            "com.amazon.ads.",
-            "com.startapp.",
-            "com.tapjoy.",
-            "com.smaato.",
-            "com.yahoo.",       "com.yahoo.mobileads.",
-            "com.yandex.",
-            "com.baidu.",       "com.baidu.mobads.",
-            "com.tencent.",     "com.tencent.gdt.",
-            "com.alipay.",
-            "com.kwad."
+            "com.bytedance.sdk.openadsdk.", "com.pangle.", "com.bykv.",
+            "jp.fluct.fluctsdk.", "jp.fluct.", "com.fluct.",
+            "com.socdm.d.adgeneration.", "com.google.android.gms.ads.",
+            "com.google.android.ads.", "com.pubmatic.", "com.pob.", "com.openwrap.",
+            "com.inmobi.", "com.millennialmedia.", "com.ironsource.", "com.supersonic.",
+            "com.applovin.", "com.applvn.", "com.unity3d.ads.", "com.taboola.", "com.outbrain.",
+            "com.vungle.", "com.amazon.ads.", "com.startapp.", "com.tapjoy.", "com.smaato.",
+            "com.yahoo.mobileads.", "com.yandex.ads.", "com.baidu.mobads.",
+            "com.tencent.gdt.", "com.kwad."
     };
 
     private static volatile boolean adActivityBlockHookInstalled;
@@ -264,7 +247,7 @@ public class NicoEnhance extends XposedModule {
             installHookSafely(installedAppHooks, "premiumUnlock",
                     () -> hookPremiumUnlock(provider));
         }
-        writeModuleActiveSentinel();
+        if (installedAppHooks.size() >= APP_HOOK_COUNT) writeModuleActiveSentinel();
     }
 
     /**
@@ -1139,9 +1122,9 @@ public class NicoEnhance extends XposedModule {
         Class<?> ctrlClass = provider.get("xf.l", "adUnitId", "nativeAd");
         if (ctrlClass == null) return 0;
         int count = 0;
-        for (Method m : ctrlClass.getDeclaredMethods()) {
-            if (m.getReturnType() != Void.TYPE || m.getParameterTypes().length != 0) continue;
-            count += hookAdControllerMethod(m);
+        for (String methodName : new String[]{"a", "e"}) {
+            Method m = findNoArgVoidMethod(ctrlClass, methodName);
+            if (m != null) count += hookAdControllerMethod(m);
         }
         if (count > 0) {
             log(Log.INFO, TAG, "Ad controller hooks on " + ctrlClass.getName() + ": " + count);
