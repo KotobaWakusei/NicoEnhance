@@ -669,7 +669,7 @@ public class NicoEnhance extends XposedModule {
                     if (result instanceof View) {
                         View root = (View) result;
                         config.refresh(root.getContext());
-                        if (root.getClass().getName().contains("ComposeView")) {
+                        if (root.getClass().getName().contains("ComposeView") || root instanceof ViewGroup) {
                             // niconico 9.14.0+ renders the settings screen entirely in Compose,
                             // so there is no View title bar / about-row to attach to. Overlay a
                             // real button on the Activity content instead.
@@ -720,7 +720,13 @@ public class NicoEnhance extends XposedModule {
         // running a DexKit search. The old 設定/アカウント/ヘルプ fingerprints no longer exist in
         // 9.14.0 and always fell through to this same name anyway.
         Class<?> resolved = provider.get(SETTINGS_FRAGMENT_CLASS);
-        if (resolved == null) return null;
+        if (resolved == null) {
+            try {
+                resolved = Class.forName(SETTINGS_FRAGMENT_CLASS, false, classLoader);
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
         return isFragmentSubclass(resolved) && findDeclaredOnCreateView(resolved) != null
                 ? resolved : null;
     }
