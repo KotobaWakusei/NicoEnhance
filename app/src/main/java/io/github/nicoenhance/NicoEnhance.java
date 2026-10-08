@@ -7,7 +7,6 @@ import android.content.ContextWrapper;
 import android.content.Intent;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
-import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.text.SpannableString;
@@ -18,11 +17,9 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.RelativeLayout;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -73,7 +70,6 @@ public class NicoEnhance extends XposedModule {
     private static final String SETTINGS_FRAGMENT_CLASS = "jp.nicovideo.android.ui.setting.SettingFragment";
     private static final String SETTINGS_BUTTON_TAG = "nicoenhance_settings_button";
     private static final String SETTINGS_ENTRY_TITLE = "NicoEnhance";
-    private static final String SETTINGS_ENTRY_SUMMARY = "\u7ffb\u8bd1\u4e0e\u589e\u5f3a\u8bbe\u7f6e";
     private static final String CONFIG_DIALOG_TITLE = "NicoEnhance";
     private static final String CONFIG_GROUP_TRANSLATION = "\u7ffb \u8bd1";
     private static final String CONFIG_GROUP_AD = "\u5e7f \u544a";
@@ -98,8 +94,6 @@ public class NicoEnhance extends XposedModule {
     private static final String CONFIG_SAVE = "\u4fdd\u5b58";
     private static final String CONFIG_CANCEL = "\u53d6\u6d88";
     private static final String CONFIG_SAVED = "\u5df2\u4fdd\u5b58\uff0c\u90e8\u5206\u9875\u9762\u9700\u91cd\u65b0\u8fdb\u5165\u6216\u91cd\u542f niconico";
-
-    private static final int MAX_VIEW_DEPTH = 50;
 
     /** Number of independent app-hook steps; used as a fast "all installed" check. */
     private static final int APP_HOOK_COUNT = 5;
