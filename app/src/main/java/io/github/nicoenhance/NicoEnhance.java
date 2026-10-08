@@ -102,7 +102,7 @@ public class NicoEnhance extends XposedModule {
     private static final int MAX_VIEW_DEPTH = 50;
 
     /** Number of independent app-hook steps; used as a fast "all installed" check. */
-    private static final int APP_HOOK_COUNT = 6;
+    private static final int APP_HOOK_COUNT = 5;
 
     /**
      * Package-name prefixes for third-party ad SDKs that niconico bundles. Any
@@ -204,8 +204,11 @@ public class NicoEnhance extends XposedModule {
 
     private void writeSelfCheckFlag() {
         try {
-            java.io.File f = new java.io.File("/data/data/" + MODULE + "/files/.module_active");
-            f.getParentFile().mkdirs();
+            String dataDir = getModuleApplicationInfo().dataDir;
+            if (dataDir == null || dataDir.isEmpty()) return;
+            java.io.File f = new java.io.File(dataDir, "files/.module_active");
+            java.io.File parent = f.getParentFile();
+            if (parent != null && !parent.exists() && !parent.mkdirs() && !parent.exists()) return;
             f.createNewFile();
         } catch (Throwable t) {
             log(Log.WARN, TAG, "Failed to write self-check flag", t);
@@ -252,8 +255,6 @@ public class NicoEnhance extends XposedModule {
         try (ClassNameProvider provider = ClassNameProvider.open(classLoader)) {
             installHookSafely(installedAppHooks, "settingsEntry",
                     () -> hookNicoSettingsEntry(classLoader, provider));
-            installHookSafely(installedAppHooks, "aboutAppComposeEntry",
-                    () -> hookAboutAppComposeEntry(classLoader, provider));
             installHookSafely(installedAppHooks, "adRemoval",
                     () -> hookAdRemoval(provider));
             installHookSafely(installedAppHooks, "composeText",
@@ -263,7 +264,6 @@ public class NicoEnhance extends XposedModule {
             installHookSafely(installedAppHooks, "premiumUnlock",
                     () -> hookPremiumUnlock(provider));
         }
-        writeSelfCheckFlag();
         writeModuleActiveSentinel();
     }
 
