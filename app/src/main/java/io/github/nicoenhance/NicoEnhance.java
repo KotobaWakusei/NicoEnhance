@@ -72,12 +72,8 @@ public class NicoEnhance extends XposedModule {
     private static final String SUPPORTER_RENDERER_SCRIPT_ASSET = "supporter_renderer/index.js";
     private static final String SETTINGS_FRAGMENT_CLASS = "jp.nicovideo.android.ui.setting.SettingFragment";
     private static final String SETTINGS_BUTTON_TAG = "nicoenhance_settings_button";
-    private static final String SETTINGS_BUTTON_SPACER_TAG = "nicoenhance_settings_button_spacer";
-    private static final String SETTINGS_FALLBACK_ROW_TAG = "nicoenhance_settings_fallback_row";
     private static final String SETTINGS_ENTRY_TITLE = "NicoEnhance";
     private static final String SETTINGS_ENTRY_SUMMARY = "\u7ffb\u8bd1\u4e0e\u589e\u5f3a\u8bbe\u7f6e";
-    private static final String ABOUT_APP_JA = "\u3053\u306e\u30a2\u30d7\u30ea\u306b\u3064\u3044\u3066";
-    private static final String ABOUT_APP_ZH = "\u5173\u4e8e\u672c\u5e94\u7528";
     private static final String CONFIG_DIALOG_TITLE = "NicoEnhance";
     private static final String CONFIG_GROUP_TRANSLATION = "\u7ffb \u8bd1";
     private static final String CONFIG_GROUP_AD = "\u5e7f \u544a";
@@ -713,8 +709,7 @@ public class NicoEnhance extends XposedModule {
         if (activity == null) return;
         ViewGroup content = activity.findViewById(android.R.id.content);
         if (content == null) return;
-        if (findTaggedView(content, SETTINGS_BUTTON_TAG) != null) return;
-        Runnable addButton = () -> {
+        Runnable add = () -> {
             if (findTaggedView(content, SETTINGS_BUTTON_TAG) != null) return;
             Context ctx = root.getContext();
             if (ctx == null) return;
@@ -723,30 +718,14 @@ public class NicoEnhance extends XposedModule {
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, dp(ctx, 40), Gravity.BOTTOM | Gravity.END);
             lp.setMargins(0, 0, dp(ctx, 16), dp(ctx, 24));
-            try {
-                content.addView(btn, lp);
-            } catch (Throwable t) {
-                debugLog("attachComposeSettingsEntry add failed", t);
-            }
+            try { content.addView(btn, lp); } catch (Throwable t) { debugLog("settings button add failed", t); }
         };
-        // Covers the case where the view is already attached when we hook (listener won't fire).
-        root.post(addButton);
+        root.post(add);
         root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
-            @Override
-            public void onViewAttachedToWindow(View v) {
-                v.post(addButton);
-            }
-
-            @Override
-            public void onViewDetachedFromWindow(View v) {
+            @Override public void onViewAttachedToWindow(View v) { v.post(add); }
+            @Override public void onViewDetachedFromWindow(View v) {
                 View btn = findTaggedView(content, SETTINGS_BUTTON_TAG);
-                if (btn != null) {
-                    try {
-                        content.removeView(btn);
-                    } catch (Throwable t) {
-                        debugLog("attachComposeSettingsEntry remove failed", t);
-                    }
-                }
+                if (btn != null) try { content.removeView(btn); } catch (Throwable t) { debugLog("settings button remove failed", t); }
             }
         });
     }
@@ -934,317 +913,9 @@ public class NicoEnhance extends XposedModule {
         btn.setClickable(true);
         btn.setFocusable(true);
         Drawable bg = resolveDrawable(ctx, android.R.attr.selectableItemBackgroundBorderless);
-        if (bg == null) bg = resolveDrawable(ctx, android.R.attr.selectableItemBackground);
         if (bg != null) btn.setBackground(bg);
         btn.setOnClickListener(v -> showConfigDialog(v.getContext()));
         return btn;
-    }
-
-    private void addButtonToTitleBar(ViewGroup titleBar, View button) {
-        if (titleBar instanceof LinearLayout
-                && ((LinearLayout) titleBar).getOrientation() == LinearLayout.HORIZONTAL) {
-            addButtonToHorizontalTitleBar((LinearLayout) titleBar, button);
-            return;
-        }
-        ViewGroup.LayoutParams params = createTitleBarButtonParams(titleBar, button.getContext());
-        try { titleBar.addView(button, params); } catch (Throwable t) {
-            debugLog("addButtonToTitleBar failed", t);
-        }
-    }
-
-    private void addButtonToHorizontalTitleBar(LinearLayout titleBar, View button) {
-        Context ctx = button.getContext();
-        if (findTaggedView(titleBar, SETTINGS_BUTTON_SPACER_TAG) == null) {
-            View spacer = new View(ctx);
-            spacer.setTag(SETTINGS_BUTTON_SPACER_TAG);
-            titleBar.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
-        }
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Math.max(dp(ctx, 40), Math.min(dp(ctx, 56), titleBar.getHeight())));
-        params.gravity = Gravity.CENTER_VERTICAL;
-        params.setMargins(dp(ctx, 8), 0, dp(ctx, 8), 0);
-        try { titleBar.addView(button, params); } catch (Throwable t) {
-            debugLog("addButtonToHorizontalTitleBar failed", t);
-        }
-    }
-
-    private ViewGroup.LayoutParams createTitleBarButtonParams(ViewGroup titleBar, Context ctx) {
-        int h = Math.max(dp(ctx, 40), Math.min(dp(ctx, 56), titleBar.getHeight()));
-        ViewGroup.LayoutParams toolbarParams = createToolbarLayoutParams(titleBar, h);
-        if (toolbarParams != null) return toolbarParams;
-        if (titleBar instanceof FrameLayout) {
-            FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, h, Gravity.END | Gravity.CENTER_VERTICAL);
-            p.setMargins(0, 0, dp(ctx, 8), 0);
-            return p;
-        }
-        if (titleBar instanceof RelativeLayout) {
-            RelativeLayout.LayoutParams p = new RelativeLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, h);
-            p.addRule(RelativeLayout.ALIGN_PARENT_END);
-            p.addRule(RelativeLayout.CENTER_VERTICAL);
-            p.setMargins(0, 0, dp(ctx, 8), 0);
-            return p;
-        }
-        ViewGroup.LayoutParams constraintParams = createConstraintLayoutParams(titleBar, ctx, h);
-        if (constraintParams != null) return constraintParams;
-        if (titleBar instanceof LinearLayout) {
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, h);
-            p.gravity = Gravity.CENTER_VERTICAL;
-            p.setMargins(dp(ctx, 8), 0, dp(ctx, 8), 0);
-            return p;
-        }
-        ViewGroup.MarginLayoutParams p = new ViewGroup.MarginLayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, h);
-        p.setMargins(dp(ctx, 8), 0, dp(ctx, 8), 0);
-        return p;
-    }
-
-    private ViewGroup.LayoutParams createToolbarLayoutParams(ViewGroup titleBar, int h) {
-        if (!titleBar.getClass().getName().toLowerCase(Locale.ROOT).contains("toolbar")) return null;
-        String[] paramClasses = {
-                "androidx.appcompat.widget.Toolbar$LayoutParams",
-                "android.widget.Toolbar$LayoutParams"
-        };
-        for (String cn : paramClasses) {
-            try {
-                Class<?> pc = Class.forName(cn, false, titleBar.getClass().getClassLoader());
-                Object p = pc.getConstructor(int.class, int.class, int.class)
-                        .newInstance(ViewGroup.LayoutParams.WRAP_CONTENT, h, Gravity.END | Gravity.CENTER_VERTICAL);
-                if (p instanceof ViewGroup.MarginLayoutParams) {
-                    ((ViewGroup.MarginLayoutParams) p).setMargins(0, 0, dp(titleBar.getContext(), 8), 0);
-                }
-                return (ViewGroup.LayoutParams) p;
-            } catch (Throwable t) {
-                debugLog("createToolbarLayoutParams failed for " + cn, t);
-            }
-        }
-        return null;
-    }
-
-    private ViewGroup.LayoutParams createConstraintLayoutParams(ViewGroup titleBar, Context ctx, int h) {
-        if (!titleBar.getClass().getName().toLowerCase(Locale.ROOT).contains("constraintlayout")) return null;
-        try {
-            Class<?> pc = Class.forName(
-                    "androidx.constraintlayout.widget.ConstraintLayout$LayoutParams",
-                    false, titleBar.getClass().getClassLoader());
-            Object p = pc.getConstructor(int.class, int.class)
-                    .newInstance(ViewGroup.LayoutParams.WRAP_CONTENT, h);
-            pc.getField("endToEnd").setInt(p, 0);
-            pc.getField("topToTop").setInt(p, 0);
-            pc.getField("bottomToBottom").setInt(p, 0);
-            if (p instanceof ViewGroup.MarginLayoutParams) {
-                ((ViewGroup.MarginLayoutParams) p).setMargins(0, 0, dp(ctx, 8), 0);
-            }
-            return (ViewGroup.LayoutParams) p;
-        } catch (Throwable t) {
-            debugLog("createConstraintLayoutParams failed", t);
-            return null;
-        }
-    }
-
-    private ViewGroup findTitleBar(View view) {
-        return findTitleBar(view, 0);
-    }
-
-    private ViewGroup findTitleBar(View view, int depth) {
-        if (depth > MAX_VIEW_DEPTH) return null;
-        if (!(view instanceof ViewGroup) || view.getVisibility() != View.VISIBLE) return null;
-        ViewGroup g = (ViewGroup) view;
-        if (isTitleBarCandidate(g)) return g;
-        for (int i = 0; i < g.getChildCount(); i++) {
-            ViewGroup found = findTitleBar(g.getChildAt(i), depth + 1);
-            if (found != null) return found;
-        }
-        return null;
-    }
-
-    private ViewGroup findSettingsTitleContainer(View root) {
-        View titleView = findSettingsTitleView(root);
-        if (titleView == null) return null;
-        ViewParent parent = titleView.getParent();
-        while (parent instanceof ViewGroup) {
-            ViewGroup g = (ViewGroup) parent;
-            if (isInsertableTitleContainer(g)) return g;
-            parent = g.getParent();
-        }
-        return null;
-    }
-
-    private boolean isInsertableTitleContainer(ViewGroup g) {
-        if (g.getVisibility() != View.VISIBLE) return false;
-        String cn = g.getClass().getName().toLowerCase(Locale.ROOT);
-        if (cn.contains("toolbar") || cn.contains("appbar") || cn.contains("actionbar")) return true;
-        int h = g.getHeight();
-        if (h < dp(g.getContext(), 40) || h > dp(g.getContext(), 112)) return false;
-        if (g instanceof LinearLayout) return ((LinearLayout) g).getOrientation() == LinearLayout.HORIZONTAL;
-        return g instanceof FrameLayout || g instanceof RelativeLayout || cn.contains("constraintlayout");
-    }
-
-    private boolean isTitleBarCandidate(ViewGroup g) {
-        String cn = g.getClass().getName().toLowerCase(Locale.ROOT);
-        if (cn.contains("toolbar") || cn.contains("appbar") || cn.contains("actionbar")) return true;
-        int h = g.getHeight();
-        if (h < dp(g.getContext(), 40) || h > dp(g.getContext(), 96)) return false;
-        return containsSettingsTitle(g);
-    }
-
-    private boolean containsSettingsTitle(View view) {
-        return containsSettingsTitle(view, 0);
-    }
-
-    private boolean containsSettingsTitle(View view, int depth) {
-        if (depth > MAX_VIEW_DEPTH) return false;
-        if (view instanceof TextView) {
-            if (isSettingsTitle(((TextView) view).getText())) return true;
-        }
-        if (isSettingsTitle(view.getContentDescription())) return true;
-        if (!(view instanceof ViewGroup)) return false;
-        ViewGroup g = (ViewGroup) view;
-        for (int i = 0; i < g.getChildCount(); i++) {
-            if (containsSettingsTitle(g.getChildAt(i), depth + 1)) return true;
-        }
-        return false;
-    }
-
-    private View findSettingsTitleView(View view) {
-        return findSettingsTitleView(view, 0);
-    }
-
-    private View findSettingsTitleView(View view, int depth) {
-        if (depth > MAX_VIEW_DEPTH) return null;
-        if (view instanceof TextView && isSettingsTitle(((TextView) view).getText())) return view;
-        if (!(view instanceof ViewGroup)) return null;
-        ViewGroup g = (ViewGroup) view;
-        for (int i = 0; i < g.getChildCount(); i++) {
-            View found = findSettingsTitleView(g.getChildAt(i), depth + 1);
-            if (found != null) return found;
-        }
-        return null;
-    }
-
-    private boolean isSettingsTitle(CharSequence text) {
-        if (text == null) return false;
-        String v = text.toString();
-        return v.contains("\u8a2d\u5b9a") || v.contains("\u8bbe\u7f6e") || v.toLowerCase(Locale.ROOT).contains("settings");
-    }
-
-    private boolean attachAboutAppFallback(View root) {
-        if (!(root instanceof ViewGroup)) return false;
-        if (findTaggedView(root, SETTINGS_BUTTON_TAG) != null
-                || findTaggedView(root, SETTINGS_FALLBACK_ROW_TAG) != null) return true;
-        TextView aboutTitle = findAboutAppTextView(root);
-        if (aboutTitle == null) {
-            Activity a = findActivity(root.getContext());
-            if (a != null) aboutTitle = findAboutAppTextView(a.getWindow().getDecorView());
-        }
-        if (aboutTitle == null) return false;
-        View row = findSettingsRow(aboutTitle);
-        if (row == null) row = aboutTitle;
-        if (insertFallbackRowAfter(row)) return true;
-        reuseAboutAppRow(row, aboutTitle);
-        return true;
-    }
-
-    private TextView findAboutAppTextView(View view) {
-        return findAboutAppTextView(view, 0);
-    }
-
-    private TextView findAboutAppTextView(View view, int depth) {
-        if (depth > MAX_VIEW_DEPTH) return null;
-        if (view instanceof TextView && isAboutAppText(((TextView) view).getText())) return (TextView) view;
-        if (!(view instanceof ViewGroup)) return null;
-        ViewGroup g = (ViewGroup) view;
-        for (int i = 0; i < g.getChildCount(); i++) {
-            TextView found = findAboutAppTextView(g.getChildAt(i), depth + 1);
-            if (found != null) return found;
-        }
-        return null;
-    }
-
-    private boolean isAboutAppText(CharSequence text) {
-        if (text == null) return false;
-        String v = text.toString();
-        return ABOUT_APP_JA.equals(v) || ABOUT_APP_ZH.equals(v);
-    }
-
-    private View findSettingsRow(View titleView) {
-        View cur = titleView;
-        ViewParent parent = titleView.getParent();
-        while (parent instanceof ViewGroup) {
-            ViewGroup g = (ViewGroup) parent;
-            int h = g.getHeight();
-            if ((g.isClickable() || g.isFocusable() || h >= dp(g.getContext(), 48))
-                    && h <= dp(g.getContext(), 112) && g.getParent() instanceof ViewGroup) return g;
-            cur = g;
-            parent = cur.getParent();
-        }
-        return cur;
-    }
-
-    private boolean insertFallbackRowAfter(View templateRow) {
-        ViewParent parent = templateRow.getParent();
-        if (!(parent instanceof ViewGroup)) return false;
-        ViewGroup pg = (ViewGroup) parent;
-        if (findTaggedView(pg, SETTINGS_FALLBACK_ROW_TAG) != null) return true;
-        int idx = pg.indexOfChild(templateRow);
-        if (idx < 0) return false;
-        View row = createFallbackSettingsRow(templateRow.getContext(), templateRow);
-        row.setTag(SETTINGS_FALLBACK_ROW_TAG);
-        try { pg.addView(row, idx + 1, createFallbackRowLayoutParams(templateRow)); return true; }
-        catch (Throwable t) {
-            debugLog("insertFallbackRowAfter failed", t);
-            return false;
-        }
-    }
-
-    private View createFallbackSettingsRow(Context ctx, View templateRow) {
-        LinearLayout row = new LinearLayout(ctx);
-        row.setOrientation(LinearLayout.VERTICAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setMinimumHeight(Math.max(dp(ctx, 64), templateRow.getHeight()));
-        row.setPadding(dp(ctx, 24), dp(ctx, 8), dp(ctx, 24), dp(ctx, 8));
-        row.setClickable(true);
-        row.setFocusable(true);
-        Drawable bg = resolveDrawable(ctx, android.R.attr.selectableItemBackground);
-        if (bg != null) row.setBackground(bg);
-        TextView title = new TextView(ctx);
-        title.setText(SETTINGS_ENTRY_TITLE);
-        title.setTextSize(16);
-        title.setTextColor(resolveColor(ctx, android.R.attr.textColorPrimary, Color.WHITE));
-        title.setSingleLine(true);
-        TextView summary = new TextView(ctx);
-        summary.setText(SETTINGS_ENTRY_SUMMARY);
-        summary.setTextSize(12);
-        summary.setTextColor(resolveColor(ctx, android.R.attr.textColorSecondary, Color.LTGRAY));
-        summary.setSingleLine(true);
-        row.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        row.addView(summary, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        row.setOnClickListener(v -> showConfigDialog(v.getContext()));
-        return row;
-    }
-
-    private ViewGroup.LayoutParams createFallbackRowLayoutParams(View templateRow) {
-        ViewGroup.LayoutParams orig = templateRow.getLayoutParams();
-        if (orig instanceof LinearLayout.LayoutParams)
-            return new LinearLayout.LayoutParams((LinearLayout.LayoutParams) orig);
-        if (orig instanceof ViewGroup.MarginLayoutParams) {
-            ViewGroup.MarginLayoutParams p = new ViewGroup.MarginLayoutParams((ViewGroup.MarginLayoutParams) orig);
-            p.height = orig.height;
-            return p;
-        }
-        int h = orig != null ? orig.height : ViewGroup.LayoutParams.WRAP_CONTENT;
-        return new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h);
-    }
-
-    private void reuseAboutAppRow(View row, TextView aboutTitle) {
-        aboutTitle.setText(SETTINGS_ENTRY_TITLE);
-        row.setTag(SETTINGS_FALLBACK_ROW_TAG);
-        row.setClickable(true);
-        row.setFocusable(true);
-        row.setOnClickListener(v -> showConfigDialog(v.getContext()));
     }
 
     // ── Config dialog ──
