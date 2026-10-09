@@ -6,6 +6,11 @@ import android.net.Uri;
 import android.os.Bundle;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AlertDialog;
+import android.content.SharedPreferences;
+import android.widget.LinearLayout;
+import android.widget.Switch;
+import android.widget.Toast;
 import androidx.cardview.widget.CardView;
 
 import com.google.android.material.button.MaterialButton;
@@ -30,6 +35,7 @@ public class MainActivity extends AppCompatActivity {
     private android.view.View statusDot;
     private CardView moduleStatusCard;
     private String currentVersion;
+    private String latestReleaseUrl = GITHUB_REPO + "/releases";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,6 +73,8 @@ public class MainActivity extends AppCompatActivity {
         checkBtn.setOnClickListener(v -> checkForUpdates());
 
         findViewById(R.id.statusCard).setOnClickListener(v -> checkModuleStatus());
+        findViewById(R.id.settingsBtn).setOnClickListener(v -> showModuleSettings());
+        updateStatus.setOnClickListener(v -> openLatestRelease());
     }
 
     private void checkModuleStatus() {
@@ -137,96 +145,90 @@ public class MainActivity extends AppCompatActivity {
 
     private void checkForUpdates() {
         long lastCheck = getPreferences(MODE_PRIVATE).getLong("last_update_check", 0);
-        if (System.currentTimeMillis() - lastCheck < 60000) {
-            updateStatus.setText("请勿频繁检查");
+        if (System.currentTimeMillis() - lastCheck < 15000) {
+            updateStatus.setText("刚刚检查过，请稍后再试");
             return;
         }
-
-        updateStatus.setText("检查中...");
+        updateStatus.setText("正在检查 GitHub Releases…");
         new Thread(() -> {
             HttpURLConnection conn = null;
             try {
-                URL url = new URL(RELEASES_API);
-                conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
-                conn.setRequestProperty("User-Agent", "NicoEnhance");
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(10000);
-
+                conn = (HttpURLConnection) new URL(RELEASES_API).openConnection();
+                conn.setRequestProperty("Accept", "application/vnd.github+json");
+                conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28");
+                conn.setRequestProperty("User-Agent", "NicoEnhance-Android");
+                conn.setConnectTimeout(12000);
+                conn.setReadTimeout(12000);
                 int code = conn.getResponseCode();
                 if (code != 200) {
-                    runOnUiThread(() -> updateStatus.setText("检查失败 (" + code + ")"));
+                    String message = "检查失败（HTTP " + code + "）";
+                    runOnUiThread(() -> updateStatus.setText(message));
                     return;
                 }
-
-                try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
-                    StringBuilder sb = new StringBuilder();
+                StringBuilder sb = new StringBuilder();
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
                     String line;
                     while ((line = br.readLine()) != null) sb.append(line);
-
-                    // releases/latest would return the rolling "NicoEnhance" release (marked
-                    // Latest, tag is not a version). Pick the newest release whose tag is a
-                    // real version instead; the list is ordered newest-first.
-                    JSONArray releases = new JSONArray(sb.toString());
-                    String latestTag = "";
-                    for (int i = 0; i < releases.length(); i++) {
-                        JSONObject release = releases.getJSONObject(i);
-                        if (release.optBoolean("draft", false) || release.optBoolean("prerelease", false)) continue;
-                        String tag = release.optString("tag_name", "");
-                        if (tag.matches("(?i)v?\\d+(\\.\\d+)+.*")) { latestTag = tag; break; }
-                    }
-
-                    getPreferences(MODE_PRIVATE).edit().putLong("last_update_check", System.currentTimeMillis()).apply();
-
-                    String result;
-                    if (latestTag.isEmpty()) {
-                        result = "无发布版本";
-                    } else if (isVersionAtLeast(currentVersion, latestTag)) {
-                        result = "已是最新版本 (" + latestTag + ")";
-                    } else {
-                        result = "发现新版本: " + latestTag;
-                    }
-                    String finalResult = result;
-                    runOnUiThread(() -> updateStatus.setText(finalResult));
                 }
+                JSONArray releases = new JSONArray(sb.toString());
+                String latestTag = "";
+                String releaseUrl = GITHUB_REPO + "/releases";
+                for (int i = 0; i < releases.length(); i++) {
+                    JSONObject release = releases.getJSONObject(i);
+                    if (release.optBoolean("draft", false) || release.optBoolean("prerelease", false)) continue;
+                    String tag = release.optString("tag_name", "").trim();
+                    if (!tag.matches("(?i)^v?\\d+(\\.\\d+)+$")) continue;
+                    if (latestTag.isEmpty() || compareVersions(tag, latestTag) > 0) {
+                        latestTag = tag;
+                        releaseUrl = release.optString("html_url", GITHUB_REPO + "/releases");
+                    }
+                }
+                getPreferences(MODE_PRIVATE).edit().putLong("last_update_check", System.currentTimeMillis()).apply();
+                final String tagResult = latestTag;
+                final String urlResult = releaseUrl;
+                final String result;
+                if (latestTag.isEmpty()) result = "没有找到有效的版本 Release";
+                else if (compareVersions(currentVersion, latestTag) >= 0) result = "已是最新版本（v" + latestTag.replaceFirst("^[vV]", "") + "）";
+                else result = "发现新版本：v" + latestTag.replaceFirst("^[vV]", "") + " · 点击查看发布页";
+                runOnUiThread(() -> {
+                    latestReleaseUrl = urlResult;
+                    updateStatus.setText(result);
+                    updateStatus.setClickable(!tagResult.isEmpty() && compareVersions(currentVersion, tagResult) < 0);
+                });
             } catch (Exception e) {
                 String msg = e.getMessage();
-                String type = e.getClass().getSimpleName();
-                runOnUiThread(() -> updateStatus.setText(
-                        "检查失败: " + type + (msg != null ? "\n" + msg : "")
-                                + "\n（需要能访问 api.github.com）"));
+                String message = "检查失败：" + e.getClass().getSimpleName()
+                        + (msg != null ? " · " + msg : "")
+                        + "\n请确认能够访问 api.github.com";
+                runOnUiThread(() -> updateStatus.setText(message));
             } finally {
                 if (conn != null) conn.disconnect();
             }
-        }).start();
+        }, "NicoEnhance-update-check").start();
     }
 
-    /**
-     * Compare semantic versions ignoring a leading "v" and treating missing segments as 0,
-     * so "v1.0.3" == "1.0.3" and "1.10" > "1.9".
-     */
-    private static boolean isVersionAtLeast(String installed, String tag) {
-        try {
-            String clean = tag.replaceFirst("^[vV]", "");
-            String[] a = installed.split("\\.");
-            String[] b = clean.split("\\.");
-            int len = Math.max(a.length, b.length);
-            for (int i = 0; i < len; i++) {
-                int x = i < a.length ? Integer.parseInt(a[i]) : 0;
-                int y = i < b.length ? Integer.parseInt(b[i]) : 0;
-                if (y > x) return false;
-                if (y < x) return true;
-            }
-            return true;
-        } catch (NumberFormatException e) {
-            return tag.equals("v" + installed) || tag.equals(installed);
+    /** Compare numeric version segments; ignores a leading v and any build suffix. */
+    private static int compareVersions(String left, String right) {
+        String[] a = left.trim().replaceFirst("^[vV]", "").split("[.+-]");
+        String[] b = right.trim().replaceFirst("^[vV]", "").split("[.+-]");
+        int len = Math.max(a.length, b.length);
+        for (int i = 0; i < len; i++) {
+            int x = i < a.length ? parseVersionPart(a[i]) : 0;
+            int y = i < b.length ? parseVersionPart(b[i]) : 0;
+            if (x != y) return Integer.compare(x, y);
         }
+        return 0;
+    }
+
+    private static int parseVersionPart(String part) {
+        String digits = part.replaceFirst("[^0-9].*$", "");
+        try { return digits.isEmpty() ? 0 : Integer.parseInt(digits); }
+        catch (NumberFormatException e) { return 0; }
     }
 
     public boolean isModuleActive() {
         if (isSelfHooked()) return true;
         if (moduleActiveSentinelExists()) return true;
-        if (moduleActiveMarkerFileExists()) return true;
         return false;
     }
 
@@ -260,7 +262,9 @@ public class MainActivity extends AppCompatActivity {
      */
     private boolean moduleActiveSentinelExists() {
         try {
-            long cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000;
+            // A status sentinel only proves recent hook activity; an old timestamp must not
+            // make a disabled module look active forever.
+            long cutoff = System.currentTimeMillis() - 5L * 60 * 1000;
             String value = android.provider.Settings.System.getString(
                     getContentResolver(), "nicoenhance_module_active_ts");
             if (value == null || value.isEmpty()) return false;
@@ -271,8 +275,78 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private boolean moduleActiveMarkerFileExists() {
-        return new java.io.File(getFilesDir(), ".module_active").exists()
-                || new java.io.File("/data/data/" + getPackageName() + "/files/.module_active").exists();
+    private boolean moduleActiveMarkerFileExists() { return false; }
+
+    private void showModuleSettings() {
+        Bundle values = readConfig();
+        String[] keys = {"translation_enabled", "runtime_text_translation_enabled",
+                "webview_translation_enabled", "ad_removal_enabled",
+                "premium_unlock_enabled", "debug_log_enabled"};
+        String[] titles = {"启用翻译与增强", "翻译应用界面文字", "翻译 WebView 内容",
+                "去除广告", "解锁会员特权", "调试日志"};
+        String[] summaries = {"总开关", "翻译设置、菜单和动态界面", "翻译版权页与内嵌网页",
+                "隐藏应用内广告和视频前贴片", "启用会员专属界面功能", "排查问题时开启，日常使用建议关闭"};
+        Switch[] switches = new Switch[keys.length];
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (18 * getResources().getDisplayMetrics().density + 0.5f);
+        content.setPadding(pad, pad / 2, pad, pad / 2);
+        for (int i = 0; i < keys.length; i++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(0, pad / 3, 0, pad / 3);
+            Switch sw = new Switch(this);
+            sw.setText(titles[i]);
+            sw.setTextSize(15);
+            sw.setChecked(values.getBoolean(keys[i], i != 5));
+            TextView summary = new TextView(this);
+            summary.setText(summaries[i]);
+            summary.setTextSize(12);
+            summary.setTextColor(getColor(R.color.text_tertiary));
+            row.addView(sw);
+            row.addView(summary);
+            content.addView(row);
+            switches[i] = sw;
+        }
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.addView(content);
+        new AlertDialog.Builder(this).setTitle("NicoEnhance 设置")
+                .setMessage("这里与 niconico 应用内的 NicoEnhance 设置共用配置。")
+                .setView(scroll)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    Bundle out = new Bundle();
+                    for (int i = 0; i < keys.length; i++) out.putBoolean(keys[i], switches[i].isChecked());
+                    try {
+                        Bundle result = getContentResolver().call(ConfigProvider.CONTENT_URI, "save_config", null, out);
+                        if (result != null && result.getBoolean("success", false)) {
+                            Toast.makeText(this, "设置已保存；部分功能需重新进入 niconico 生效", Toast.LENGTH_LONG).show();
+                        } else {
+                            Toast.makeText(this, "保存失败，请重试", Toast.LENGTH_LONG).show();
+                        }
+                    } catch (Throwable t) {
+                        Toast.makeText(this, "保存失败：" + t.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
+                    }
+                }).show();
+    }
+
+    private Bundle readConfig() {
+        try {
+            Bundle values = getContentResolver().call(ConfigProvider.CONTENT_URI, "get_config", null, null);
+            if (values != null) return values;
+        } catch (Throwable ignored) {}
+        Bundle defaults = new Bundle();
+        defaults.putBoolean("translation_enabled", true);
+        defaults.putBoolean("runtime_text_translation_enabled", true);
+        defaults.putBoolean("webview_translation_enabled", true);
+        defaults.putBoolean("ad_removal_enabled", true);
+        defaults.putBoolean("premium_unlock_enabled", true);
+        defaults.putBoolean("debug_log_enabled", false);
+        return defaults;
+    }
+
+    private void openLatestRelease() {
+        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(latestReleaseUrl))); }
+        catch (Throwable ignored) { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_REPO + "/releases"))); }
     }
 }
