@@ -668,20 +668,48 @@ public class NicoEnhance extends XposedModule {
                     Object result = chain.proceed();
                     if (result instanceof View) {
                         View root = (View) result;
-                        config.refresh(root.getContext());
-                        if (root.getClass().getName().contains("ComposeView") || root instanceof ViewGroup) {
-                            // niconico 9.14.0+ renders the settings screen entirely in Compose,
-                            // so there is no View title bar / about-row to attach to. Overlay a
-                            // real button on the Activity content instead.
+                        try {
+                            config.refresh(root.getContext());
                             attachComposeSettingsEntry(root);
-                        } else {
-                            // 9.14.x uses Compose for the settings screen; do not touch legacy View title bars.
-                            log(Log.INFO, TAG, "Non-Compose settings view detected; legacy entry injection skipped");
+                            log(Log.INFO, TAG, "Settings entry view created: " + root.getClass().getName());
+                        } catch (Throwable t) {
+                            log(Log.WARN, TAG, "Settings entry injection failed after onCreateView", t);
                         }
+                    } else {
+                        log(Log.WARN, TAG, "SettingFragment.onCreateView returned " +
+                                (result == null ? "null" : result.getClass().getName()));
                     }
                     return result;
                 });
-        log(Log.INFO, TAG, "Settings entry hook installed: " + fragmentClass.getName());
+
+        // Some app versions defer/recreate the Compose content after onCreateView. Retry
+        // from Fragment.onResume as a second independent attachment point.
+        try {
+            Method onResume = fragmentClass.getMethod("onResume");
+            onResume.setAccessible(true);
+            hook(onResume)
+                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                    .intercept(chain -> {
+                        Object result = chain.proceed();
+                        Object fragment = chain.getThisObject();
+                        if (fragment != null && SETTINGS_FRAGMENT_CLASS.equals(fragment.getClass().getName())) {
+                            try {
+                                Method getView = fragmentClass.getMethod("getView");
+                                Object view = getView.invoke(fragment);
+                                if (view instanceof View) {
+                                    attachComposeSettingsEntry((View) view);
+                                    log(Log.INFO, TAG, "Settings entry retried from Fragment.onResume");
+                                }
+                            } catch (Throwable t) {
+                                log(Log.WARN, TAG, "Settings entry onResume retry failed", t);
+                            }
+                        }
+                        return result;
+                    });
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "Could not install settings onResume fallback", t);
+        }
+        log(Log.INFO, TAG, "Settings entry hooks installed: " + fragmentClass.getName());
     }
 
     /**
@@ -691,9 +719,16 @@ public class NicoEnhance extends XposedModule {
      */
     private void attachComposeSettingsEntry(View root) {
         Activity activity = findActivity(root.getContext());
-        if (activity == null) return;
+        if (activity == null) {
+            log(Log.WARN, TAG, "Settings entry skipped: no Activity found from root context " +
+                    root.getContext().getClass().getName());
+            return;
+        }
         ViewGroup content = activity.findViewById(android.R.id.content);
-        if (content == null) return;
+        if (content == null) {
+            log(Log.WARN, TAG, "Settings entry skipped: Activity content view not found");
+            return;
+        }
         Runnable add = () -> {
             if (findTaggedView(content, SETTINGS_BUTTON_TAG) != null) return;
             Context ctx = root.getContext();
@@ -703,7 +738,12 @@ public class NicoEnhance extends XposedModule {
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, dp(ctx, 40), Gravity.BOTTOM | Gravity.END);
             lp.setMargins(0, 0, dp(ctx, 16), dp(ctx, 24));
-            try { content.addView(btn, lp); } catch (Throwable t) { debugLog("settings button add failed", t); }
+            try {
+                content.addView(btn, lp);
+                log(Log.INFO, TAG, "NicoEnhance settings button attached to Activity content");
+            } catch (Throwable t) {
+                log(Log.WARN, TAG, "Settings button add failed", t);
+            }
         };
         root.post(add);
         root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
