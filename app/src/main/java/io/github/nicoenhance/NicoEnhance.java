@@ -266,9 +266,16 @@ public class NicoEnhance extends XposedModule {
             if (!(app instanceof Context)) return;
             Context ctx = (Context) app;
             android.content.ContentResolver cr = ctx.getContentResolver();
-            android.provider.Settings.System.putString(cr, SETTINGS_SENTINEL_KEY,
-                    Long.toString(System.currentTimeMillis()));
-            log(Log.INFO, TAG, "Module-active sentinel written to " + SETTINGS_SENTINEL_KEY);
+            long now = System.currentTimeMillis();
+            android.os.Bundle timestamp = new android.os.Bundle();
+            timestamp.putLong("timestamp", now);
+            // The exported provider persists the target-process signal under the module app's
+            // UID, avoiding WRITE_SETTINGS restrictions on Android 12+.
+            cr.call(ConfigProvider.CONTENT_URI, "mark_active", null, timestamp);
+            try {
+                android.provider.Settings.System.putString(cr, SETTINGS_SENTINEL_KEY, Long.toString(now));
+            } catch (Throwable ignored) {}
+            log(Log.INFO, TAG, "Target-app hook activity recorded at " + now);
         } catch (Throwable t) {
             // Expected on Android 12+ (WRITE_SETTINGS required); MainActivity uses fallbacks.
             if (sentinelWarnLogged.compareAndSet(false, true)) {
