@@ -45,6 +45,20 @@ public final class ConfigProvider extends ContentProvider {
             out.putBoolean("premium_unlock_enabled", p.getBoolean("premium_unlock_enabled", true));
             return out;
         }
+        if ("mark_active".equals(method)) {
+            if (!isTargetCaller()) throw new SecurityException("Only niconico may report hook activity");
+            long timestamp = extras == null ? System.currentTimeMillis()
+                    : extras.getLong("timestamp", System.currentTimeMillis());
+            p.edit().putLong("module_active_ts", timestamp).apply();
+            Bundle out = new Bundle();
+            out.putLong("timestamp", timestamp);
+            return out;
+        }
+        if ("get_status".equals(method)) {
+            Bundle out = new Bundle();
+            out.putLong("timestamp", p.getLong("module_active_ts", 0L));
+            return out;
+        }
         if ("save_config".equals(method)) {
             if (extras == null) throw new IllegalArgumentException("Missing config values");
             SharedPreferences.Editor edit = p.edit();
@@ -63,6 +77,13 @@ public final class ConfigProvider extends ContentProvider {
         String[] packages = getContext().getPackageManager().getPackagesForUid(uid);
         if (packages == null) return false;
         for (String pkg : packages) if (MODULE_PACKAGE.equals(pkg) || TARGET_PACKAGE.equals(pkg)) return true;
+        return false;
+    }
+
+    private boolean isTargetCaller() {
+        String[] packages = getContext().getPackageManager().getPackagesForUid(Binder.getCallingUid());
+        if (packages == null) return false;
+        for (String pkg : packages) if (TARGET_PACKAGE.equals(pkg)) return true;
         return false;
     }
 
