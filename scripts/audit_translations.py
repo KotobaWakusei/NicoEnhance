@@ -87,7 +87,7 @@ def audit(path):
         print(f"  REVIEW empty value {key!r}: logical line {line} (may be intentional)")
     for key, value, line in likely_untranslated:
         print(f"  REVIEW Japanese-only value {key!r}={value!r}: logical line {line}")
-    return bool(duplicates)
+    return bool(duplicates or empty_values)
 
 def main():
     failed = False
