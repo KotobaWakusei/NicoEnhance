@@ -86,6 +86,17 @@ jobs:
             -PversionName="${{ steps.version.outputs.version_name }}" \
             -PversionCode="${{ steps.version.outputs.version_code }}"
 
+      - name: Verify APK signature and package metadata
+        run: |
+          set -euo pipefail
+          apk="app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk"
+          apksigner verify --verbose --print-certs "$apk"
+          aapt dump badging "$apk" | tee /tmp/apk-badging.txt
+          grep -q "package: name='io.github.kotobawakusei.nicoenhance'" /tmp/apk-badging.txt
+          grep -q "sdkVersion:'29'" /tmp/apk-badging.txt
+          sha256sum "$apk"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
