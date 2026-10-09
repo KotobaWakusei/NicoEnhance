@@ -112,6 +112,9 @@ jobs:
           grep -q "package: name='io.github.kotobawakusei.nicoenhance'" /tmp/apk-badging.txt
           grep -q "sdkVersion:'29'" /tmp/apk-badging.txt
           grep -q "targetSdkVersion:'36'" /tmp/apk-badging.txt
+          grep -q "versionCode='\${{ steps.version.outputs.version_code }}'" /tmp/apk-badging.txt
+          grep -q "versionName='\${{ steps.version.outputs.version_name }}'" /tmp/apk-badging.txt
+          unzip -t "$apk"
           sha256sum "$apk"
 
       - name: Upload APK artifact
