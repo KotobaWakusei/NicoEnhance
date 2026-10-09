@@ -170,8 +170,11 @@ jobs:
         run: |
           set -euo pipefail
           gh release list --repo "${{ github.repository }}" --limit 100 --json tagName --jq '.[].tagName' |
+          current_tag="v${{ steps.version.outputs.version_name }}"
           while IFS= read -r tag; do
             [[ -z "$tag" ]] && continue
+            # Keep the release just created by this workflow run.
+            [[ "$tag" == "$current_tag" ]] && continue
             echo "Deleting old release: $tag"
             gh release delete "$tag" --repo "${{ github.repository }}" --yes
           done
