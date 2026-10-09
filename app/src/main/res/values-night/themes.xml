@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NicoEnhance" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#FFFF6B8B</item>
+        <item name="colorPrimaryVariant">#FFE52E63</item>
+        <item name="colorOnPrimary">#FF241018</item>
+        <item name="colorSecondary">#FFFF6B8B</item>
+        <item name="colorOnSecondary">#FF241018</item>
+        <item name="android:colorBackground">#FF121116</item>
+        <item name="colorSurface">#FF1E1B23</item>
+        <item name="colorOnSurface">#FFF5EFF7</item>
+        <item name="colorOnSurfaceVariant">#FFCAC3CE</item>
+    </style>
+</resources>
