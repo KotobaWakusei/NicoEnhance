@@ -9,7 +9,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
 
 import com.google.android.material.button.MaterialButton;
-import com.google.android.material.textview.MaterialTextView;
+import android.widget.TextView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -25,8 +25,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String GITHUB_REPO = "https://github.com/KotobaWakusei/NicoEnhance";
     private static final String RELEASES_API = "https://api.github.com/repos/KotobaWakusei/NicoEnhance/releases?per_page=30";
 
-    private MaterialTextView updateStatus;
-    private MaterialTextView moduleStatusText;
+    private TextView updateStatus;
+    private TextView moduleStatusText;
     private android.view.View statusDot;
     private CardView moduleStatusCard;
     private String currentVersion;
@@ -41,7 +41,7 @@ public class MainActivity extends AppCompatActivity {
             currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
         } catch (PackageManager.NameNotFoundException ignored) {}
 
-        ((MaterialTextView) findViewById(R.id.versionInfo)).setText("v" + currentVersion);
+        ((TextView) findViewById(R.id.versionInfo)).setText("v" + currentVersion);
         updateStatus = findViewById(R.id.updateStatus);
         moduleStatusText = findViewById(R.id.statusText);
         moduleStatusCard = findViewById(R.id.statusCard);
@@ -121,8 +121,8 @@ public class MainActivity extends AppCompatActivity {
             final String t = total;
             final String e = exact;
             runOnUiThread(() -> {
-                ((MaterialTextView) findViewById(R.id.statTotal)).setText(t);
-                ((MaterialTextView) findViewById(R.id.statExact)).setText(e);
+                ((TextView) findViewById(R.id.statTotal)).setText(t);
+                ((TextView) findViewById(R.id.statExact)).setText(e);
             });
         }).start();
     }

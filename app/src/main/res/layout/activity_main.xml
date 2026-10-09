@@ -75,7 +75,7 @@
             android:layout_marginBottom="12dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutline"
+            app:strokeColor="@color/text_tertiary"
            >
 
             <LinearLayout
@@ -140,8 +140,7 @@
             android:layout_marginBottom="12dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutline"
-            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Large">
+            app:strokeColor="@color/text_tertiary">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -178,7 +177,7 @@
                     android:layout_width="1dp"
                     android:layout_height="42dp"
                     android:layout_gravity="center"
-                    android:background="?attr/colorOutline" />
+                    android:background="@color/text_tertiary" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -223,8 +222,7 @@
             android:layout_marginBottom="12dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutline"
-            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Large">
+            app:strokeColor="@color/text_tertiary">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -285,8 +283,7 @@
             android:layout_marginBottom="12dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutline"
-            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Large">
+            app:strokeColor="@color/text_tertiary">
 
             <LinearLayout
                 android:layout_width="match_parent"
