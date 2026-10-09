@@ -33,6 +33,7 @@ public final class ConfigProvider extends ContentProvider {
         Bundle result = new Bundle();
         if ("getConfig".equals(method)) {
             for (int i = 0; i < KEYS.length; i++) result.putBoolean(KEYS[i], prefs.getBoolean(KEYS[i], DEFAULTS[i]));
+            result.putBoolean("config_initialized", prefs.getBoolean("config_initialized", false));
             return result;
         }
         if ("saveConfig".equals(method)) {
@@ -41,6 +42,7 @@ public final class ConfigProvider extends ContentProvider {
             for (int i = 0; i < KEYS.length; i++) {
                 editor.putBoolean(KEYS[i], extras.getBoolean(KEYS[i], prefs.getBoolean(KEYS[i], DEFAULTS[i])));
             }
+            editor.putBoolean("config_initialized", true);
             editor.apply();
             result.putBoolean("ok", true);
             return result;

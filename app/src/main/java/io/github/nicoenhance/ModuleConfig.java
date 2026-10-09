@@ -29,6 +29,21 @@ final class ModuleConfig {
 
     void refresh(Context context) {
         Bundle remote = callProvider(context, "getConfig", null);
+        SharedPreferences prefs = getPreferences(context);
+        if (remote != null && !remote.getBoolean("config_initialized", true)
+                && hasLegacyConfig(prefs)) {
+            Bundle legacy = new Bundle();
+            legacy.putBoolean(KEY_TRANSLATION_ENABLED, prefs.getBoolean(KEY_TRANSLATION_ENABLED, true));
+            legacy.putBoolean(KEY_RUNTIME_TEXT_TRANSLATION_ENABLED, prefs.getBoolean(KEY_RUNTIME_TEXT_TRANSLATION_ENABLED, true));
+            legacy.putBoolean(KEY_WEBVIEW_TRANSLATION_ENABLED, prefs.getBoolean(KEY_WEBVIEW_TRANSLATION_ENABLED, true));
+            legacy.putBoolean(KEY_AD_REMOVAL_ENABLED, prefs.getBoolean(KEY_AD_REMOVAL_ENABLED, true));
+            legacy.putBoolean(KEY_DEBUG_LOG_ENABLED, prefs.getBoolean(KEY_DEBUG_LOG_ENABLED, false));
+            legacy.putBoolean(KEY_PREMIUM_UNLOCK_ENABLED, prefs.getBoolean(KEY_PREMIUM_UNLOCK_ENABLED, true));
+            Bundle migrated = callProvider(context, "saveConfig", legacy);
+            if (migrated != null && migrated.getBoolean("ok", false)) {
+                remote = callProvider(context, "getConfig", null);
+            }
+        }
         if (remote != null) {
             translationEnabled = remote.getBoolean(KEY_TRANSLATION_ENABLED, true);
             runtimeTextTranslationEnabled = remote.getBoolean(KEY_RUNTIME_TEXT_TRANSLATION_ENABLED, true);
@@ -40,7 +55,6 @@ final class ModuleConfig {
             loaded = true;
             return;
         }
-        SharedPreferences prefs = getPreferences(context);
         if (prefs == null) return;
         translationEnabled = prefs.getBoolean(KEY_TRANSLATION_ENABLED, true);
         runtimeTextTranslationEnabled = prefs.getBoolean(KEY_RUNTIME_TEXT_TRANSLATION_ENABLED, true);
@@ -50,6 +64,15 @@ final class ModuleConfig {
         premiumUnlockEnabled = prefs.getBoolean(KEY_PREMIUM_UNLOCK_ENABLED, true);
         lastRefreshElapsed = android.os.SystemClock.elapsedRealtime();
         loaded = true;
+    }
+
+    private boolean hasLegacyConfig(SharedPreferences prefs) {
+        return prefs != null && (prefs.contains(KEY_TRANSLATION_ENABLED)
+                || prefs.contains(KEY_RUNTIME_TEXT_TRANSLATION_ENABLED)
+                || prefs.contains(KEY_WEBVIEW_TRANSLATION_ENABLED)
+                || prefs.contains(KEY_AD_REMOVAL_ENABLED)
+                || prefs.contains(KEY_DEBUG_LOG_ENABLED)
+                || prefs.contains(KEY_PREMIUM_UNLOCK_ENABLED));
     }
 
     private Bundle callProvider(Context context, String method, Bundle extras) {
