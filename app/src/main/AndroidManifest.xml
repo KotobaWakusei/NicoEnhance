@@ -15,6 +15,12 @@
         <meta-data android:name="xposedminversion" android:value="102" />
         <meta-data android:name="xposedscope" android:resource="@array/xposedscope" />
 
+        <provider
+            android:name=".ConfigProvider"
+            android:authorities="io.github.kotobawakusei.nicoenhance.config"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
