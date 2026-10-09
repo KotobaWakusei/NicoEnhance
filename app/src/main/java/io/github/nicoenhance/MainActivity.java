@@ -92,7 +92,7 @@ public class MainActivity extends AppCompatActivity {
                     ? "已检测到 niconico 注入"
                     : "LSPosed 模块已激活\n上次注入时间：" + since);
         } else {
-            moduleStatusText.setText("LSPosed 模块未激活\n"
+            moduleStatusText.setText("尚未检测到近期的 niconico 注入\n"
                     + "改包名后在 LSPosed 中是一个全新的、默认关闭的模块：\n"
                     + "1. 启用 io.github.kotobawakusei.nicoenhance\n"
                     + "2. 确认作用域包含 niconico\n"
