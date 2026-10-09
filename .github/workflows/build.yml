@@ -63,7 +63,7 @@ jobs:
           while IFS= read -r tag; do
             [[ -z "$tag" ]] && continue
             echo "Deleting old release: $tag"
-            gh release delete "$tag" --repo "${{ github.repository }}" --yes --cleanup-tag
+            gh release delete "$tag" --repo "${{ github.repository }}" --yes
           done
 
 
