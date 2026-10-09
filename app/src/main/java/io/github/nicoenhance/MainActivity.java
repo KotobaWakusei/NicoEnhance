@@ -70,16 +70,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void checkModuleStatus() {
-        if (isModuleActive()) {
+        boolean active = isModuleActive();
+        if (statusDot != null) {
+            int dotColor = active ? 0xFF4CAF50 : 0xFFF44336;
+            statusDot.setBackgroundTintList(
+                    android.content.res.ColorStateList.valueOf(dotColor));
+            statusDot.setContentDescription(active ? "模块已激活" : "模块未激活");
+        }
+        if (active) {
             String since = moduleActiveLastSeen();
             moduleStatusText.setText(since == null
                     ? "LSPosed 模块已激活"
-                    : "LSPosed 模块已激活\n上次注入时间：" + since);
+                    : "LSPosed 模块已激活\\n上次注入时间：" + since);
         } else {
-            moduleStatusText.setText("LSPosed 模块未激活\n"
-                    + "改包名后在 LSPosed 中是一个全新的、默认关闭的模块：\n"
-                    + "1. 启用 io.github.kotobawakusei.nicoenhance\n"
-                    + "2. 确认作用域包含 niconico\n"
+            moduleStatusText.setText("LSPosed 模块未激活\\n"
+                    + "改包名后在 LSPosed 中是一个全新的、默认关闭的模块：\\n"
+                    + "1. 启用 io.github.kotobawakusei.nicoenhance\\n"
+                    + "2. 确认作用域包含 niconico\\n"
                     + "3. 重启手机（或强制停止 niconico 后重开）");
         }
         moduleStatusCard.setCardBackgroundColor(getColor(R.color.card_background));
