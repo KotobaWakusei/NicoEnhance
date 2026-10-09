@@ -254,7 +254,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="翻译条目"
+                        android:text="资源名映射（去重）"
                         android:textSize="12sp"
                         android:textColor="?android:attr/textColorSecondary"
                         android:layout_marginTop="4dp" />
@@ -290,7 +290,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="整句匹配"
+                        android:text="整句映射（去重）"
                         android:textSize="12sp"
                         android:textColor="?android:attr/textColorSecondary"
                         android:layout_marginTop="4dp" />
@@ -534,6 +534,17 @@
                     android:layout_marginTop="7dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/moduleSettingsBtn"
+            style="@style/Widget.MaterialComponents.Button"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginBottom="12dp"
+            android:text="模块设置"
+            android:textAllCaps="false"
+            android:textSize="15sp"
+            app:cornerRadius="16dp" />
 
         <LinearLayout
             android:layout_width="match_parent"

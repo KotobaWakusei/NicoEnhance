@@ -106,6 +106,9 @@ jobs:
           echo "Next release: v$version (versionCode=$code)"
 
 
+      - name: Audit translation dictionaries
+        run: python3 scripts/audit_translations.py
+
       - name: Run tests and Android lint
         run: ./gradlew test lint
 

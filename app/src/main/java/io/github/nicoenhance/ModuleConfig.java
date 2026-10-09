@@ -1,6 +1,9 @@
 package io.github.nicoenhance;
 
 import android.content.Context;
+import android.content.ContentResolver;
+import android.net.Uri;
+import android.os.Bundle;
 import android.content.SharedPreferences;
 
 final class ModuleConfig {
@@ -13,6 +16,7 @@ final class ModuleConfig {
     private static final String KEY_AD_REMOVAL_ENABLED = "ad_removal_enabled";
     private static final String KEY_DEBUG_LOG_ENABLED = "debug_log_enabled";
     private static final String KEY_PREMIUM_UNLOCK_ENABLED = "premium_unlock_enabled";
+    private static final Uri CONFIG_URI = Uri.parse("content://io.github.kotobawakusei.nicoenhance.config");
 
     private volatile boolean loaded;
     private volatile long lastRefreshElapsed;
@@ -24,6 +28,18 @@ final class ModuleConfig {
     private volatile boolean premiumUnlockEnabled = true;
 
     void refresh(Context context) {
+        Bundle remote = callProvider(context, "getConfig", null);
+        if (remote != null) {
+            translationEnabled = remote.getBoolean(KEY_TRANSLATION_ENABLED, true);
+            runtimeTextTranslationEnabled = remote.getBoolean(KEY_RUNTIME_TEXT_TRANSLATION_ENABLED, true);
+            webViewTranslationEnabled = remote.getBoolean(KEY_WEBVIEW_TRANSLATION_ENABLED, true);
+            adRemovalEnabled = remote.getBoolean(KEY_AD_REMOVAL_ENABLED, true);
+            debugLogEnabled = remote.getBoolean(KEY_DEBUG_LOG_ENABLED, false);
+            premiumUnlockEnabled = remote.getBoolean(KEY_PREMIUM_UNLOCK_ENABLED, true);
+            lastRefreshElapsed = android.os.SystemClock.elapsedRealtime();
+            loaded = true;
+            return;
+        }
         SharedPreferences prefs = getPreferences(context);
         if (prefs == null) return;
         translationEnabled = prefs.getBoolean(KEY_TRANSLATION_ENABLED, true);
@@ -34,6 +50,16 @@ final class ModuleConfig {
         premiumUnlockEnabled = prefs.getBoolean(KEY_PREMIUM_UNLOCK_ENABLED, true);
         lastRefreshElapsed = android.os.SystemClock.elapsedRealtime();
         loaded = true;
+    }
+
+    private Bundle callProvider(Context context, String method, Bundle extras) {
+        if (context == null) return null;
+        try {
+            ContentResolver resolver = context.getContentResolver();
+            return resolver.call(CONFIG_URI, method, null, extras);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     /**
@@ -57,16 +83,26 @@ final class ModuleConfig {
             boolean debugLogEnabled,
             boolean premiumUnlockEnabled
     ) {
-        SharedPreferences prefs = getPreferences(context);
-        if (prefs != null) {
-            prefs.edit()
-                    .putBoolean(KEY_TRANSLATION_ENABLED, translationEnabled)
-                    .putBoolean(KEY_RUNTIME_TEXT_TRANSLATION_ENABLED, runtimeTextTranslationEnabled)
-                    .putBoolean(KEY_WEBVIEW_TRANSLATION_ENABLED, webViewTranslationEnabled)
-                    .putBoolean(KEY_AD_REMOVAL_ENABLED, adRemovalEnabled)
-                    .putBoolean(KEY_DEBUG_LOG_ENABLED, debugLogEnabled)
-                    .putBoolean(KEY_PREMIUM_UNLOCK_ENABLED, premiumUnlockEnabled)
-                    .apply();
+        Bundle values = new Bundle();
+        values.putBoolean(KEY_TRANSLATION_ENABLED, translationEnabled);
+        values.putBoolean(KEY_RUNTIME_TEXT_TRANSLATION_ENABLED, runtimeTextTranslationEnabled);
+        values.putBoolean(KEY_WEBVIEW_TRANSLATION_ENABLED, webViewTranslationEnabled);
+        values.putBoolean(KEY_AD_REMOVAL_ENABLED, adRemovalEnabled);
+        values.putBoolean(KEY_DEBUG_LOG_ENABLED, debugLogEnabled);
+        values.putBoolean(KEY_PREMIUM_UNLOCK_ENABLED, premiumUnlockEnabled);
+        Bundle result = callProvider(context, "saveConfig", values);
+        if (result == null || !result.getBoolean("ok", false)) {
+            SharedPreferences prefs = getPreferences(context);
+            if (prefs != null) {
+                prefs.edit()
+                        .putBoolean(KEY_TRANSLATION_ENABLED, translationEnabled)
+                        .putBoolean(KEY_RUNTIME_TEXT_TRANSLATION_ENABLED, runtimeTextTranslationEnabled)
+                        .putBoolean(KEY_WEBVIEW_TRANSLATION_ENABLED, webViewTranslationEnabled)
+                        .putBoolean(KEY_AD_REMOVAL_ENABLED, adRemovalEnabled)
+                        .putBoolean(KEY_DEBUG_LOG_ENABLED, debugLogEnabled)
+                        .putBoolean(KEY_PREMIUM_UNLOCK_ENABLED, premiumUnlockEnabled)
+                        .apply();
+            }
         }
         this.translationEnabled = translationEnabled;
         this.runtimeTextTranslationEnabled = runtimeTextTranslationEnabled;
@@ -74,6 +110,7 @@ final class ModuleConfig {
         this.adRemovalEnabled = adRemovalEnabled;
         this.debugLogEnabled = debugLogEnabled;
         this.premiumUnlockEnabled = premiumUnlockEnabled;
+        lastRefreshElapsed = android.os.SystemClock.elapsedRealtime();
         loaded = true;
     }
 
