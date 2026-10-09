@@ -73,7 +73,9 @@ jobs:
 
           patch=$((patch + 1))
           version="${major}.${minor}.${patch}"
-          code=$((major * 10000 + minor * 100 + patch))
+          # Keep Android versionCode monotonic even when release tags are reset to v1.0.0.
+          # GitHub run numbers are unique and current values exceed previous semver-derived codes.
+          code=$((100000 + GITHUB_RUN_NUMBER))
 
           echo "version_name=$version" >> "$GITHUB_OUTPUT"
           echo "version_code=$code" >> "$GITHUB_OUTPUT"
@@ -91,10 +93,22 @@ jobs:
           set -euo pipefail
           apk="app/build/outputs/apk/release/app-release.apk"
           test -s "$apk"
-          apksigner verify --verbose --print-certs "$apk"
-          aapt dump badging "$apk" | tee /tmp/apk-badging.txt
+
+          # Android SDK tools are installed under build-tools and are not guaranteed
+          # to be present directly on PATH on GitHub-hosted runners.
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          build_tools="$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d -print | sort -V | tail -n1)"
+          test -n "$build_tools"
+          apksigner="$build_tools/apksigner"
+          aapt="$build_tools/aapt"
+          test -x "$apksigner"
+          test -x "$aapt"
+
+          "$apksigner" verify --verbose --print-certs "$apk"
+          "$aapt" dump badging "$apk" | tee /tmp/apk-badging.txt
           grep -q "package: name='io.github.kotobawakusei.nicoenhance'" /tmp/apk-badging.txt
           grep -q "sdkVersion:'29'" /tmp/apk-badging.txt
+          grep -q "targetSdkVersion:'36'" /tmp/apk-badging.txt
           sha256sum "$apk"
 
       - name: Upload APK artifact
