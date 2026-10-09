@@ -673,6 +673,13 @@ public class NicoEnhance extends XposedModule {
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                 .intercept(chain -> {
                     Object result = chain.proceed();
+                    Object fragmentInstance = chain.getThisObject();
+                    // If onCreateView is inherited, the hook sits on a shared Fragment base
+                    // method. Restrict injection to the exact niconico settings fragment.
+                    if (fragmentInstance == null
+                            || !SETTINGS_FRAGMENT_CLASS.equals(fragmentInstance.getClass().getName())) {
+                        return result;
+                    }
                     if (result instanceof View) {
                         View root = (View) result;
                         try {
@@ -789,11 +796,20 @@ public class NicoEnhance extends XposedModule {
     }
 
     private Method findDeclaredOnCreateView(Class<?> fragmentClass) {
-        try {
-            return fragmentClass.getDeclaredMethod("onCreateView", LayoutInflater.class, ViewGroup.class, Bundle.class);
-        } catch (NoSuchMethodException e) {
-            return null;
+        // Some app builds inherit the Compose-backed Fragment implementation. Walk the class
+        // hierarchy instead of silently skipping the settings entry when the override is inherited.
+        Class<?> current = fragmentClass;
+        while (current != null && current != Object.class) {
+            try {
+                Method method = current.getDeclaredMethod(
+                        "onCreateView", LayoutInflater.class, ViewGroup.class, Bundle.class);
+                method.setAccessible(true);
+                return method;
+            } catch (NoSuchMethodException ignored) {
+                current = current.getSuperclass();
+            }
         }
+        return null;
     }
 
     private View createSettingsEntryButton(Context ctx) {
