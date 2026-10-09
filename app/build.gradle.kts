@@ -32,9 +32,16 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
-            // 本地/无 keystore 环境（如 fork PR）不强制签名，产出 unsigned APK
-            if (file("keystore/nicoenhance.jks").exists()) {
-                signingConfig = signingConfigs.getByName("release")
+            // Always produce an installable APK. If the private release keystore is
+            // unavailable in CI, use Android's debug key instead of publishing an
+            // unsigned APK (unsigned APKs commonly fail with "package parse error").
+            signingConfig = if (file("keystore/nicoenhance.jks").exists()
+                && !ksStorePassword.isNullOrBlank()
+                && !ksKeyAlias.isNullOrBlank()
+                && !ksKeyPassword.isNullOrBlank()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
