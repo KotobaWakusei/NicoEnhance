@@ -82,6 +82,9 @@ jobs:
           echo "Next release: v$version (versionCode=$code)"
 
 
+      - name: Run tests and Android lint
+        run: ./gradlew test lint
+
       - name: Build release APK
         run: |
           ./gradlew assembleRelease \
