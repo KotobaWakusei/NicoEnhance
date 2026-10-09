@@ -102,10 +102,10 @@ public class MainActivity extends AppCompatActivity {
 
     private String moduleActiveLastSeen() {
         try {
-            String value = android.provider.Settings.System.getString(
-                    getContentResolver(), "nicoenhance_module_active_ts");
-            if (value == null || value.isEmpty()) return null;
-            long ts = Long.parseLong(value);
+            android.os.Bundle status = getContentResolver().call(
+                    ConfigProvider.CONTENT_URI, "get_status", null, null);
+            long ts = status == null ? 0L : status.getLong("timestamp", 0L);
+            if (ts <= 0L || System.currentTimeMillis() - ts > 5L * 60 * 1000) return null;
             return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
                     .format(new java.util.Date(ts));
         } catch (Throwable t) {
@@ -229,9 +229,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public boolean isModuleActive() {
-        if (isSelfHooked()) return true;
-        if (moduleActiveSentinelExists()) return true;
-        return false;
+        // The module app itself may be in LSPosed scope while niconico is not. Only the recent
+        // signal written by the target process proves that the actual niconico hooks installed.
+        return moduleActiveSentinelExists();
     }
 
     /**
@@ -264,14 +264,11 @@ public class MainActivity extends AppCompatActivity {
      */
     private boolean moduleActiveSentinelExists() {
         try {
-            // A status sentinel only proves recent hook activity; an old timestamp must not
-            // make a disabled module look active forever.
-            long cutoff = System.currentTimeMillis() - 5L * 60 * 1000;
-            String value = android.provider.Settings.System.getString(
-                    getContentResolver(), "nicoenhance_module_active_ts");
-            if (value == null || value.isEmpty()) return false;
-            long ts = Long.parseLong(value);
-            return ts >= cutoff;
+            android.os.Bundle status = getContentResolver().call(
+                    ConfigProvider.CONTENT_URI, "get_status", null, null);
+            long ts = status == null ? 0L : status.getLong("timestamp", 0L);
+            return ts > 0L && System.currentTimeMillis() - ts >= 0
+                    && System.currentTimeMillis() - ts <= 5L * 60 * 1000;
         } catch (Throwable t) {
             return false;
         }
