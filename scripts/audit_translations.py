@@ -67,6 +67,7 @@ def audit(path):
     entries = {}
     duplicates = []
     empty_values = []
+    likely_untranslated = []
     for logical_line, logical in enumerate(logical_lines(path.read_text(encoding="utf-8")), 1):
         stripped = logical.lstrip()
         if not stripped or stripped.startswith(("#", "!")):
@@ -77,11 +78,15 @@ def audit(path):
         entries[key] = logical_line
         if value == "":
             empty_values.append((key, logical_line))
-    print(f"{path}: {len(entries)} unique keys; {len(duplicates)} duplicate definitions; {len(empty_values)} empty values")
+        if any("\\u3040" <= ch <= "\\u30ff" for ch in value) and not any("\\u4e00" <= ch <= "\\u9fff" for ch in value):
+            likely_untranslated.append((key, value, logical_line))
+    print(f"{path}: {len(entries)} unique keys; {len(duplicates)} duplicate definitions; {len(empty_values)} empty values; {len(likely_untranslated)} Japanese-only value candidates")
     for key, first, duplicate in duplicates:
         print(f"  DUPLICATE {key!r}: first logical line {first}, repeated at {duplicate}")
     for key, line in empty_values:
         print(f"  EMPTY {key!r}: logical line {line}")
+    for key, value, line in likely_untranslated:
+        print(f"  REVIEW Japanese-only value {key!r}={value!r}: logical line {line}")
     return bool(duplicates or empty_values)
 
 def main():

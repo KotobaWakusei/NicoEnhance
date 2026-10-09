@@ -235,7 +235,10 @@ public class NicoEnhance extends XposedModule {
     }
 
     private void installAppHooks(ClassLoader classLoader) {
-        if (installedAppHooks.size() >= APP_HOOK_COUNT) return;
+        if (installedAppHooks.size() >= APP_HOOK_COUNT) {
+            writeModuleActiveSentinel();
+            return;
+        }
         try (ClassNameProvider provider = ClassNameProvider.open(classLoader)) {
             installHookSafely(installedAppHooks, "settingsEntry",
                     () -> hookNicoSettingsEntry(classLoader, provider));

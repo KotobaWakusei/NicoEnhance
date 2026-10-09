@@ -34,6 +34,9 @@ jobs:
           gradle-version: 8.9
           validate-wrappers: false
 
+      - name: Audit translation dictionaries
+        run: python3 scripts/audit_translations.py
+
       - name: Run unit tests, lint, and debug build
         run: |
           chmod +x gradlew
