@@ -101,19 +101,6 @@ public class MainActivity extends AppCompatActivity {
         moduleStatusCard.setCardBackgroundColor(getColor(R.color.card_background));
     }
 
-    private String moduleActiveLastSeen() {
-        try {
-            String value = android.provider.Settings.System.getString(
-                    getContentResolver(), "nicoenhance_module_active_ts");
-            if (value == null || value.isEmpty()) return null;
-            long ts = Long.parseLong(value);
-            return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
-                    .format(new java.util.Date(ts));
-        } catch (Throwable t) {
-            return null;
-        }
-    }
-
     private void loadTranslationStats() {
         // Parsing ~4k properties lines is I/O + work; keep it off the UI thread so onCreate
         // does not block on it.
