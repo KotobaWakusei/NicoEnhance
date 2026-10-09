@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FF17151B</color>
+    <color name="nico_red">#FFFF6B8B</color>
+    <color name="nico_white">#FFFFFFFF</color>
+    <color name="md3_background">#FF121116</color>
+    <color name="card_background">#FF1E1B23</color>
+    <color name="text_primary">#FFF5EFF7</color>
+    <color name="text_secondary">#FFCAC3CE</color>
+    <color name="text_tertiary">#FF4A444F</color>
+</resources>
