@@ -120,8 +120,10 @@ public class MainActivity extends AppCompatActivity {
             String total;
             String exact;
             try {
-                total = String.valueOf(countEntries("translations/zh-CN/strings.properties"));
-                exact = String.valueOf(countEntries("translations/zh-CN/exact.properties"));
+                int resourceKeys = countEntries("translations/zh-CN/strings.properties");
+                int exactEntries = countEntries("translations/zh-CN/exact.properties");
+                total = String.valueOf(resourceKeys + exactEntries);
+                exact = String.valueOf(exactEntries);
             } catch (Exception e) {
                 total = "?";
                 exact = "?";
