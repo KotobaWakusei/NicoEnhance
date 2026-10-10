@@ -1849,7 +1849,9 @@ public class NicoEnhance extends XposedModule {
             Object app = currentApplication.invoke(null);
             if (app instanceof Context) config.refresh((Context) app);
         } catch (Throwable t) {
-            debugLog("ensureConfigLoaded failed", t);
+            // Avoid debugLog here: it calls ensureConfigLoaded() and would recurse
+            // indefinitely if configuration loading keeps failing.
+            log(Log.WARN, TAG, "ensureConfigLoaded failed", t);
         }
     }
 
