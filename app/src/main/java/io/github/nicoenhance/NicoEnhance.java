@@ -235,7 +235,10 @@ public class NicoEnhance extends XposedModule {
     }
 
     private void installAppHooks(ClassLoader classLoader) {
-        if (installedAppHooks.size() >= APP_HOOK_COUNT) return;
+        if (installedAppHooks.size() >= APP_HOOK_COUNT) {
+            writeModuleActiveSentinel();
+            return;
+        }
         try (ClassNameProvider provider = ClassNameProvider.open(classLoader)) {
             installHookSafely(installedAppHooks, "settingsEntry",
                     () -> hookNicoSettingsEntry(classLoader, provider));
@@ -248,7 +251,7 @@ public class NicoEnhance extends XposedModule {
             installHookSafely(installedAppHooks, "premiumUnlock",
                     () -> hookPremiumUnlock(provider));
         }
-        if (installedAppHooks.size() >= APP_HOOK_COUNT) writeModuleActiveSentinel();
+        writeModuleActiveSentinel();
     }
 
     /**
@@ -265,14 +268,17 @@ public class NicoEnhance extends XposedModule {
             Object app = currentApplication.invoke(null);
             if (!(app instanceof Context)) return;
             Context ctx = (Context) app;
-            android.content.ContentResolver cr = ctx.getContentResolver();
-            android.provider.Settings.System.putString(cr, SETTINGS_SENTINEL_KEY,
-                    Long.toString(System.currentTimeMillis()));
-            log(Log.INFO, TAG, "Module-active sentinel written to " + SETTINGS_SENTINEL_KEY);
+            Bundle result = ctx.getContentResolver().call(
+                    android.net.Uri.parse("content://io.github.kotobawakusei.nicoenhance.config"),
+                    "markActive", null, null);
+            if (result != null && result.getBoolean("ok", false)) {
+                log(Log.INFO, TAG, "Target-process injection timestamp recorded");
+            } else {
+                log(Log.WARN, TAG, "ConfigProvider did not confirm target-process injection timestamp");
+            }
         } catch (Throwable t) {
-            // Expected on Android 12+ (WRITE_SETTINGS required); MainActivity uses fallbacks.
             if (sentinelWarnLogged.compareAndSet(false, true)) {
-                log(Log.WARN, TAG, "Failed to write module-active sentinel (expected on Android 12+); MainActivity will fall back to other signals", t);
+                log(Log.WARN, TAG, "Failed to record target-process injection timestamp", t);
             }
         }
     }
@@ -653,20 +659,21 @@ public class NicoEnhance extends XposedModule {
     private void hookNicoSettingsEntry(ClassLoader classLoader, ClassNameProvider provider) {
         Class<?> fragmentClass = findSettingFragmentClass(classLoader, provider);
         if (fragmentClass == null) {
-            log(Log.WARN, TAG, "SettingFragment not found; settings entry skipped");
-            return;
+            log(Log.WARN, TAG, "SettingFragment not found; settings entry will be retried");
+            throw new IllegalStateException("SettingFragment not found");
         }
         Method onCreateView = findDeclaredOnCreateView(fragmentClass);
         if (onCreateView == null) {
             log(Log.WARN, TAG, "SettingFragment.onCreateView not found in " + fragmentClass.getName());
-            return;
+            throw new IllegalStateException("SettingFragment.onCreateView not found");
         }
         onCreateView.setAccessible(true);
         hook(onCreateView)
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                 .intercept(chain -> {
                     Object result = chain.proceed();
-                    if (result instanceof View) {
+                    Object fragment = chain.getThisObject();
+                    if (fragmentClass.isInstance(fragment) && result instanceof View) {
                         View root = (View) result;
                         try {
                             config.refresh(root.getContext());
@@ -692,7 +699,7 @@ public class NicoEnhance extends XposedModule {
                     .intercept(chain -> {
                         Object result = chain.proceed();
                         Object fragment = chain.getThisObject();
-                        if (fragment != null && SETTINGS_FRAGMENT_CLASS.equals(fragment.getClass().getName())) {
+                        if (fragmentClass.isInstance(fragment)) {
                             try {
                                 Method getView = fragmentClass.getMethod("getView");
                                 Object view = getView.invoke(fragment);
@@ -782,11 +789,16 @@ public class NicoEnhance extends XposedModule {
     }
 
     private Method findDeclaredOnCreateView(Class<?> fragmentClass) {
-        try {
-            return fragmentClass.getDeclaredMethod("onCreateView", LayoutInflater.class, ViewGroup.class, Bundle.class);
-        } catch (NoSuchMethodException e) {
-            return null;
+        Class<?> current = fragmentClass;
+        while (current != null && current != Object.class) {
+            try {
+                return current.getDeclaredMethod("onCreateView",
+                        LayoutInflater.class, ViewGroup.class, Bundle.class);
+            } catch (NoSuchMethodException ignored) {
+                current = current.getSuperclass();
+            }
         }
+        return null;
     }
 
     private View createSettingsEntryButton(Context ctx) {
@@ -796,9 +808,15 @@ public class NicoEnhance extends XposedModule {
         btn.setMinWidth(dp(ctx, 88));
         btn.setPadding(dp(ctx, 12), 0, dp(ctx, 12), 0);
         btn.setSingleLine(true);
-        btn.setText(SETTINGS_ENTRY_TITLE);
+        btn.setText(SETTINGS_ENTRY_TITLE + " 设置");
         btn.setTextSize(14);
-        btn.setTextColor(resolveColor(ctx, android.R.attr.colorAccent, 0xFF0099FF));
+        btn.setTextColor(0xFFFFFFFF);
+        btn.setElevation(dp(ctx, 6));
+        android.graphics.drawable.GradientDrawable buttonBackground =
+                new android.graphics.drawable.GradientDrawable();
+        buttonBackground.setColor(0xFF1769E0);
+        buttonBackground.setCornerRadius(dp(ctx, 24));
+        btn.setBackground(buttonBackground);
         btn.setClickable(true);
         btn.setFocusable(true);
         Drawable bg = resolveDrawable(ctx, android.R.attr.selectableItemBackgroundBorderless);

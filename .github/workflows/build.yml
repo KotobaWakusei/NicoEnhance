@@ -34,6 +34,9 @@ jobs:
           gradle-version: 8.9
           validate-wrappers: false
 
+      - name: Audit translation dictionaries
+        run: python3 scripts/audit_translations.py
+
       - name: Run unit tests, lint, and debug build
         run: |
           chmod +x gradlew
@@ -105,6 +108,9 @@ jobs:
           echo "version_code=$code" >> "$GITHUB_OUTPUT"
           echo "Next release: v$version (versionCode=$code)"
 
+
+      - name: Audit translation dictionaries
+        run: python3 scripts/audit_translations.py
 
       - name: Run tests and Android lint
         run: ./gradlew test lint
