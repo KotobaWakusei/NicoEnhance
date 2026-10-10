@@ -48,11 +48,27 @@ public final class ConfigProvider extends ContentProvider {
             return result;
         }
         if ("markActive".equals(method)) {
+            // The module UI shares this provider UID, but must never be able to report a
+            // successful target-process injection itself. Only niconico may refresh this signal.
+            if (!isTargetCaller()) {
+                throw new SecurityException("Only niconico may report target hook activity");
+            }
             prefs.edit().putLong("last_target_hook_ts", System.currentTimeMillis()).apply();
             result.putBoolean("ok", true);
             return result;
         }
         return result;
+    }
+
+    private boolean isTargetCaller() {
+        Context context = getContext();
+        if (context == null) return false;
+        String[] packages = context.getPackageManager().getPackagesForUid(Binder.getCallingUid());
+        if (packages == null) return false;
+        for (String packageName : packages) {
+            if (TARGET_PACKAGE.equals(packageName)) return true;
+        }
+        return false;
     }
 
     private boolean isAllowedCaller() {
