@@ -820,7 +820,8 @@ public class NicoEnhance extends XposedModule {
         btn.setClickable(true);
         btn.setFocusable(true);
         Drawable bg = resolveDrawable(ctx, android.R.attr.selectableItemBackgroundBorderless);
-        if (bg != null) btn.setBackground(bg);
+        // Keep the custom blue rounded background; use the theme drawable only for ripple feedback.
+        if (bg != null) btn.setForeground(bg);
         btn.setOnClickListener(v -> showConfigDialog(v.getContext()));
         return btn;
     }
@@ -1849,7 +1850,9 @@ public class NicoEnhance extends XposedModule {
             Object app = currentApplication.invoke(null);
             if (app instanceof Context) config.refresh((Context) app);
         } catch (Throwable t) {
-            debugLog("ensureConfigLoaded failed", t);
+            // Avoid debugLog here: it calls ensureConfigLoaded() and would recurse
+            // indefinitely if configuration loading keeps failing.
+            log(Log.WARN, TAG, "ensureConfigLoaded failed", t);
         }
     }
 
