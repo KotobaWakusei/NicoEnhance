@@ -820,7 +820,8 @@ public class NicoEnhance extends XposedModule {
         btn.setClickable(true);
         btn.setFocusable(true);
         Drawable bg = resolveDrawable(ctx, android.R.attr.selectableItemBackgroundBorderless);
-        if (bg != null) btn.setBackground(bg);
+        // Keep the custom blue rounded background; use the theme drawable only for ripple feedback.
+        if (bg != null) btn.setForeground(bg);
         btn.setOnClickListener(v -> showConfigDialog(v.getContext()));
         return btn;
     }
