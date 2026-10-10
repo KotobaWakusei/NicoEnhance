@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      reset_release_history:
+        description: "Delete all old version tags/releases and restart at v1.0.0"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -87,15 +93,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          latest="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n1)"
-          if [[ "$latest" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            major="${BASH_REMATCH[1]}"
-            minor="${BASH_REMATCH[2]}"
-            patch="${BASH_REMATCH[3]}"
-          else
+          if [[ "${{ inputs.reset_release_history }}" == "true" ]]; then
+            # Explicit one-time reset. Old refs are removed only after the APK passes verification.
             major=1
             minor=0
             patch=-1
+          else
+            latest="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n1)"
+            if [[ "$latest" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              major="${BASH_REMATCH[1]}"
+              minor="${BASH_REMATCH[2]}"
+              patch="${BASH_REMATCH[3]}"
+            else
+              major=1
+              minor=0
+              patch=-1
+            fi
           fi
 
           patch=$((patch + 1))
@@ -154,6 +167,30 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Reset old release history (explicit manual request only)
+        if: github.event_name == 'workflow_dispatch' && inputs.reset_release_history
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY}"
+
+          # Remove published releases and their tags first.
+          gh release list --repo "$repo" --limit 100 --json tagName --jq '.[].tagName' |
+          while IFS= read -r tag; do
+            [[ -z "$tag" ]] && continue
+            echo "Deleting release: $tag"
+            gh release delete "$tag" --repo "$repo" --cleanup-tag --yes
+          done
+
+          # Also remove version tags that no longer have a corresponding Release.
+          gh api --paginate "repos/$repo/git/matching-refs/tags/" --jq '.[].ref' |
+          while IFS= read -r ref; do
+            [[ -z "$ref" ]] && continue
+            echo "Deleting remaining tag ref: $ref"
+            gh api --method DELETE "repos/$repo/git/refs/${ref#refs/}"
+          done
 
       - name: Create the new release
         env:
