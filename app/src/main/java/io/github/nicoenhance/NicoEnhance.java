@@ -251,7 +251,12 @@ public class NicoEnhance extends XposedModule {
             installHookSafely(installedAppHooks, "premiumUnlock",
                     () -> hookPremiumUnlock(provider));
         }
-        writeModuleActiveSentinel();
+        if (installedAppHooks.size() >= APP_HOOK_COUNT) {
+            writeModuleActiveSentinel();
+        } else {
+            log(Log.WARN, TAG, "App hooks incomplete; active status not updated ("
+                    + installedAppHooks.size() + "/" + APP_HOOK_COUNT + ")");
+        }
     }
 
     /**
