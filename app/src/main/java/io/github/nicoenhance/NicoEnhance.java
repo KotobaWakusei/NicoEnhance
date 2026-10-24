@@ -220,6 +220,29 @@ public class NicoEnhance extends XposedModule {
         }
     }
 
+    /** App hook groups report whether at least one compatible hook was actually installed. */
+    private interface AppHookInstaller {
+        boolean install() throws Throwable;
+    }
+
+    /**
+     * Track an app-hook group only when it found compatible methods to hook. Some installers
+     * intentionally catch reflection errors, so a void-returning wrapper could otherwise mark
+     * an unavailable group as installed and suppress later retries.
+     */
+    private void installAppHookSafely(Set<String> installed, String name, AppHookInstaller installer) {
+        if (!installed.add(name)) return;
+        try {
+            if (!installer.install()) {
+                installed.remove(name);
+                log(Log.WARN, TAG, "No compatible hooks installed for " + name + "; keeping it retryable");
+            }
+        } catch (Throwable t) {
+            installed.remove(name);
+            log(Log.ERROR, TAG, "Failed to install hook " + name + "; keeping it retryable", t);
+        }
+    }
+
     private void installResourceHooks() {
         installHookSafely(installedResourceHooks, "string", this::hookStringMethods);
         installHookSafely(installedResourceHooks, "text", this::hookTextMethods);
@@ -240,17 +263,23 @@ public class NicoEnhance extends XposedModule {
             return;
         }
         try (ClassNameProvider provider = ClassNameProvider.open(classLoader)) {
-            installHookSafely(installedAppHooks, "settingsEntry",
+            installAppHookSafely(installedAppHooks, "settingsEntry",
                     () -> hookNicoSettingsEntry(classLoader, provider));
-            installHookSafely(installedAppHooks, "adRemoval",
+            installAppHookSafely(installedAppHooks, "adRemoval",
                     () -> hookAdRemoval(provider));
-            installHookSafely(installedAppHooks, "composeText",
+            installAppHookSafely(installedAppHooks, "composeText",
                     () -> hookComposeTextMethods(classLoader));
-            installHookSafely(installedAppHooks, "preference",
+            installAppHookSafely(installedAppHooks, "preference",
                     () -> hookPreferenceMethods(classLoader));
-            installHookSafely(installedAppHooks, "premiumUnlock",
+            installAppHookSafely(installedAppHooks, "premiumUnlock",
                     () -> hookPremiumUnlock(provider));
         }
+        if (installedAppHooks.size() < APP_HOOK_COUNT) {
+            log(Log.WARN, TAG, "App hook groups installed: " + installedAppHooks.size()
+                    + "/" + APP_HOOK_COUNT + " " + installedAppHooks);
+        }
+        // This timestamp proves target-process injection, not that every optional feature hook
+        // matched this particular niconico version.
         writeModuleActiveSentinel();
     }
 
@@ -656,7 +685,7 @@ public class NicoEnhance extends XposedModule {
 
     // ── Settings injection ──
 
-    private void hookNicoSettingsEntry(ClassLoader classLoader, ClassNameProvider provider) {
+    private boolean hookNicoSettingsEntry(ClassLoader classLoader, ClassNameProvider provider) {
         Class<?> fragmentClass = findSettingFragmentClass(classLoader, provider);
         if (fragmentClass == null) {
             log(Log.WARN, TAG, "SettingFragment not found; settings entry will be retried");
@@ -717,6 +746,7 @@ public class NicoEnhance extends XposedModule {
             log(Log.WARN, TAG, "Could not install settings onResume fallback", t);
         }
         log(Log.INFO, TAG, "Settings entry hooks installed: " + fragmentClass.getName());
+        return true;
     }
 
     /**
@@ -959,7 +989,7 @@ public class NicoEnhance extends XposedModule {
 
     // ── Ad removal ──
 
-    private void hookAdRemoval(ClassNameProvider provider) {
+    private boolean hookAdRemoval(ClassNameProvider provider) {
         int count = 0;
         count += hookInAppAdFactory(provider);
         count += hookInAppAdController(provider);
@@ -972,6 +1002,7 @@ public class NicoEnhance extends XposedModule {
         } else {
             log(Log.WARN, TAG, "No ad removal hooks were installed");
         }
+        return count > 0;
     }
 
     private int hookInAppAdFactory(ClassNameProvider provider) {
@@ -1330,7 +1361,7 @@ public class NicoEnhance extends XposedModule {
 
     // ── Premium unlock ──
 
-    private void hookPremiumUnlock(ClassNameProvider provider) {
+    private boolean hookPremiumUnlock(ClassNameProvider provider) {
         int count = 0;
         count += hookNicoSessionGetter(provider);
         count += hookNicoSessionReturn(provider);
@@ -1341,6 +1372,7 @@ public class NicoEnhance extends XposedModule {
         } else {
             log(Log.WARN, TAG, "No premium unlock hooks were installed");
         }
+        return count > 0;
     }
 
     private int hookNicoSessionGetter(ClassNameProvider provider) {
@@ -1570,13 +1602,15 @@ public class NicoEnhance extends XposedModule {
 
     // ── Compose text hooks ──
 
-    private void hookComposeTextMethods(ClassLoader classLoader) {
-        hookComposeTextClass(classLoader, "androidx.compose.material3.TextKt");
-        hookComposeTextClass(classLoader, "androidx.compose.material.TextKt");
-        hookComposeTextClass(classLoader, "androidx.compose.foundation.text.BasicTextKt");
+    private boolean hookComposeTextMethods(ClassLoader classLoader) {
+        int count = 0;
+        count += hookComposeTextClass(classLoader, "androidx.compose.material3.TextKt");
+        count += hookComposeTextClass(classLoader, "androidx.compose.material.TextKt");
+        count += hookComposeTextClass(classLoader, "androidx.compose.foundation.text.BasicTextKt");
+        return count > 0;
     }
 
-    private void hookComposeTextClass(ClassLoader classLoader, String className) {
+    private int hookComposeTextClass(ClassLoader classLoader, String className) {
         try {
             Class<?> textClass = Class.forName(className, false, classLoader);
             Method[] methods = textClass.getDeclaredMethods();
@@ -1600,17 +1634,27 @@ public class NicoEnhance extends XposedModule {
                 }
             }
             if (count > 0) log(Log.INFO, TAG, "Compose text hooks for " + className + ": " + count);
+            return count;
         } catch (ClassNotFoundException t) {
             debugLog("hookComposeTextClass class not found: " + className, t);
+            return 0;
         }
     }
 
     // ── Preference hooks ──
 
-    private void hookPreferenceMethods(ClassLoader classLoader) {
+    private boolean hookPreferenceMethods(ClassLoader classLoader) {
+        final Class<?> prefClass;
+        final Method getContext;
         try {
-            Class<?> prefClass = Class.forName("androidx.preference.Preference", false, classLoader);
-            Method getContext = prefClass.getMethod("getContext");
+            prefClass = Class.forName("androidx.preference.Preference", false, classLoader);
+            getContext = prefClass.getMethod("getContext");
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
+            debugLog("Preference API not available yet; will retry", e);
+            return false;
+        }
+
+        try {
             hookPreferenceTextSetter(prefClass, "setTitle");
             hookPreferenceTextSetter(prefClass, "setSummary");
             hookPreferenceTextGetter(prefClass, "getTitle");
@@ -1621,8 +1665,12 @@ public class NicoEnhance extends XposedModule {
             hookDialogPreferenceMethods(classLoader);
             hookListPreferenceMethods(classLoader);
             log(Log.INFO, TAG, "Preference translation hooks installed");
-        } catch (ClassNotFoundException ignored) {}
-        catch (Throwable t) { log(Log.WARN, TAG, "Failed to hook Preference methods", t); }
+        } catch (Throwable t) {
+            // Some methods may already be hooked; do not blindly retry this group and risk
+            // registering duplicate interceptors. The failure is still visible in the log.
+            log(Log.WARN, TAG, "Partially installed Preference hooks; see preceding error", t);
+        }
+        return true;
     }
 
     private void hookPreferenceTextSetter(Class<?> prefClass, String methodName) throws NoSuchMethodException {
