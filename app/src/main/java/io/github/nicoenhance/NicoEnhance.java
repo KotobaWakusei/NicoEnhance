@@ -1654,23 +1654,36 @@ public class NicoEnhance extends XposedModule {
             return false;
         }
 
-        try {
-            hookPreferenceTextSetter(prefClass, "setTitle");
-            hookPreferenceTextSetter(prefClass, "setSummary");
-            hookPreferenceTextGetter(prefClass, "getTitle");
-            hookPreferenceTextGetter(prefClass, "getSummary");
-            hookPreferenceResourceSetter(prefClass, getContext, "setTitle");
-            hookPreferenceResourceSetter(prefClass, getContext, "setSummary");
-            hookPreferenceBindViewHolder(classLoader, prefClass);
-            hookDialogPreferenceMethods(classLoader);
-            hookListPreferenceMethods(classLoader);
-            log(Log.INFO, TAG, "Preference translation hooks installed");
-        } catch (Throwable t) {
-            // Some methods may already be hooked; do not blindly retry this group and risk
-            // registering duplicate interceptors. The failure is still visible in the log.
-            log(Log.WARN, TAG, "Partially installed Preference hooks; see preceding error", t);
+        int installed = 0;
+        if (tryInstallPreferenceHook("setTitle", () -> hookPreferenceTextSetter(prefClass, "setTitle"))) installed++;
+        if (tryInstallPreferenceHook("setSummary", () -> hookPreferenceTextSetter(prefClass, "setSummary"))) installed++;
+        if (tryInstallPreferenceHook("getTitle", () -> hookPreferenceTextGetter(prefClass, "getTitle"))) installed++;
+        if (tryInstallPreferenceHook("getSummary", () -> hookPreferenceTextGetter(prefClass, "getSummary"))) installed++;
+        if (tryInstallPreferenceHook("setTitle(resource)", () -> hookPreferenceResourceSetter(prefClass, getContext, "setTitle"))) installed++;
+        if (tryInstallPreferenceHook("setSummary(resource)", () -> hookPreferenceResourceSetter(prefClass, getContext, "setSummary"))) installed++;
+
+        if (installed == 0) {
+            log(Log.WARN, TAG, "No compatible Preference methods were hooked; keeping group retryable");
+            return false;
         }
+
+        // Install optional bind/dialog/list hooks only after at least one core Preference hook
+        // succeeded, so a zero-success retry cannot duplicate their interceptors.
+        hookPreferenceBindViewHolder(classLoader, prefClass);
+        hookDialogPreferenceMethods(classLoader);
+        hookListPreferenceMethods(classLoader);
+        log(Log.INFO, TAG, "Preference translation hooks installed: " + installed);
         return true;
+    }
+
+    private boolean tryInstallPreferenceHook(String name, HookInstaller installer) {
+        try {
+            installer.install();
+            return true;
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "Failed to install Preference hook " + name, t);
+            return false;
+        }
     }
 
     private void hookPreferenceTextSetter(Class<?> prefClass, String methodName) throws NoSuchMethodException {
