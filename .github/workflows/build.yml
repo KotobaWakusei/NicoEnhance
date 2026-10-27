@@ -72,6 +72,23 @@ jobs:
           echo "$KS_BASE64" | base64 -d > app/keystore/nicoenhance.jks
           test -s app/keystore/nicoenhance.jks
 
+      - name: Require release signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$HAS_KS" != "true" ]]; then
+            echo "::error::Release signing secrets are missing; refusing to publish a debug-signed APK."
+            exit 1
+          fi
+          test -s app/keystore/nicoenhance.jks || {
+            echo "::error::Release keystore was not restored."
+            exit 1
+          }
+          test -n "$KS_STORE_PASSWORD" && test -n "$KS_KEY_ALIAS" && test -n "$KS_KEY_PASSWORD" || {
+            echo "::error::Release signing credentials are incomplete."
+            exit 1
+          }
+
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
@@ -150,7 +167,15 @@ jobs:
           test -x "$apksigner"
           test -x "$aapt"
 
-          "$apksigner" verify --verbose --print-certs "$apk"
+          signer_output="$("$apksigner" verify --verbose --print-certs "$apk")"
+          printf '%s\n' "$signer_output"
+          # Keep the signing identity stable so users can update an installed APK.
+          expected_cert_sha256="dfe24653339309ac603a8a32385eba50209de93d2027c62f750e1e0a5cc7408e"
+          actual_cert_sha256="$(printf '%s\n' "$signer_output" | sed -n 's/.*certificate SHA-256 digest: //p' | head -n1)"
+          if [[ "$actual_cert_sha256" != "$expected_cert_sha256" ]]; then
+            echo "::error::Release APK signing certificate mismatch; refusing to publish an incompatible update."
+            exit 1
+          fi
           "$aapt" dump badging "$apk" | tee /tmp/apk-badging.txt
           grep -q "package: name='io.github.kotobawakusei.nicoenhance'" /tmp/apk-badging.txt
           grep -q "sdkVersion:'29'" /tmp/apk-badging.txt
