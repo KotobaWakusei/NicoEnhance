@@ -138,6 +138,15 @@ public class NicoEnhance extends XposedModule {
     private final Set<View> translatedSubtrees =
             Collections.newSetFromMap(new WeakHashMap<View, Boolean>());
 
+    /**
+     * Roots that already have the settings-entry attach/detach listener. The weak keys avoid
+     * retaining destroyed Fragment views, while the set prevents duplicate listeners when
+     * Fragment.onResume repeatedly retries settings-entry attachment for the same root.
+     * Accessed only from the main thread.
+     */
+    private final Set<View> settingsEntryRoots =
+            Collections.newSetFromMap(new WeakHashMap<View, Boolean>());
+
     @Override
     public void onPackageLoaded(PackageLoadedParam param) {
         String pkg = param.getPackageName();
@@ -783,13 +792,15 @@ public class NicoEnhance extends XposedModule {
             }
         };
         root.post(add);
-        root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
-            @Override public void onViewAttachedToWindow(View v) { v.post(add); }
-            @Override public void onViewDetachedFromWindow(View v) {
-                View btn = findTaggedView(content, SETTINGS_BUTTON_TAG);
-                if (btn != null) try { content.removeView(btn); } catch (Throwable t) { debugLog("settings button remove failed", t); }
-            }
-        });
+        if (settingsEntryRoots.add(root)) {
+            root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override public void onViewAttachedToWindow(View v) { v.post(add); }
+                @Override public void onViewDetachedFromWindow(View v) {
+                    View btn = findTaggedView(content, SETTINGS_BUTTON_TAG);
+                    if (btn != null) try { content.removeView(btn); } catch (Throwable t) { debugLog("settings button remove failed", t); }
+                }
+            });
+        }
     }
 
     private Class<?> findSettingFragmentClass(ClassLoader classLoader, ClassNameProvider provider) {
