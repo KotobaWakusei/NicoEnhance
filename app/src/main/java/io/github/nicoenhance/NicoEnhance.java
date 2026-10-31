@@ -776,6 +776,9 @@ public class NicoEnhance extends XposedModule {
             return;
         }
         Runnable add = () -> {
+            // A posted callback may run after Fragment's root has detached. Do not leave
+            // the overlay on the Activity content once the settings screen is gone.
+            if (!root.isAttachedToWindow()) return;
             if (findTaggedView(content, SETTINGS_BUTTON_TAG) != null) return;
             Context ctx = root.getContext();
             if (ctx == null) return;
