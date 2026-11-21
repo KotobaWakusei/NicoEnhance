@@ -1,4 +1,77 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Nico增强</string>
+
+    <!-- Header -->
+    <string name="header_subtitle">让 niconico 更好用</string>
+
+    <!-- Hero -->
+    <string name="hero_kicker">NICONICO ENHANCEMENT</string>
+    <string name="hero_title">你的 niconico，\n更顺手一点。</string>
+    <string name="hero_summary">汉化 · 去广告 · 翻译增强</string>
+
+    <!-- Module status -->
+    <string name="status_section_title">运行状态</string>
+    <string name="status_checking">正在检查模块状态…</string>
+    <string name="status_active">模块已激活</string>
+    <string name="status_active_with_time">LSPosed 模块已激活\n上次注入时间：%1$s</string>
+    <string name="status_inactive">尚未检测到近期的 niconico 注入</string>
+    <string name="status_inactive_detail">改包名后在 LSPosed 中是一个全新的、默认关闭的模块：\n1. 启用 io.github.kotobawakusei.nicoenhance\n2. 确认作用域包含 niconico\n3. 重启手机（或强制停止 niconico 后重开）</string>
+    <string name="status_refresh_hint">点击卡片可刷新状态</string>
+    <string name="status_scope_label">作用域</string>
+    <string name="status_scope_value">niconico · jp.nicovideo.android</string>
+    <string name="status_dot_active_content">模块已激活</string>
+    <string name="status_dot_inactive_content">模块未激活</string>
+
+    <!-- Translation stats -->
+    <string name="stats_section_title">翻译资源</string>
+    <string name="stats_locale">简体中文</string>
+    <string name="stat_total_label">资源名映射（去重）</string>
+    <string name="stat_exact_label">整句映射（去重）</string>
+
+    <!-- Features -->
+    <string name="features_section_title">功能一览</string>
+    <string name="feature_ui_title">界面汉化</string>
+    <string name="feature_ui_summary">常用界面与文案本地化</string>
+    <string name="feature_ad_title">广告净化</string>
+    <string name="feature_ad_summary">减少广告与干扰内容</string>
+    <string name="feature_webview_title">WebView / Compose 翻译</string>
+    <string name="feature_webview_summary">覆盖更多现代界面与设置项</string>
+    <string name="feature_advanced_title">高级功能增强</string>
+    <string name="feature_advanced_summary">持续完善客户端体验</string>
+
+    <!-- About -->
+    <string name="about_section_title">关于 NicoEnhance</string>
+    <string name="about_summary">基于 LSPosed 为 niconico 提供增强功能。模块状态异常时，请先检查 LSPosed 启用状态与作用域。</string>
+
+    <!-- Buttons -->
+    <string name="btn_module_settings">模块设置</string>
+    <string name="btn_github">查看 GitHub</string>
+    <string name="btn_check_update">检查更新</string>
+
+    <!-- Update status -->
+    <string name="update_idle">检查更新以获取最新版本</string>
+    <string name="update_checking">正在检查 GitHub 最新正式版本…</string>
+    <string name="update_latest">已是最新版本（当前 %1$s / 最新 %2$s）</string>
+    <string name="update_available">发现新版本：%1$s，点击此处打开下载页面</string>
+    <string name="update_failed">检查失败：%1$s\n%2$s\n请检查网络，或直接打开 GitHub Releases。</string>
+    <string name="update_open_failed">无法打开发布页面：%1$s</string>
+    <string name="update_saved">模块设置已保存；重开 niconico 可应用所有变更。</string>
+    <string name="update_not_stable">该发布不是正式版本（draft/prerelease）</string>
+    <string name="update_bad_tag">无法识别版本标签：%1$s</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_module_settings_title">NicoEnhance 模块设置</string>
+    <string name="dialog_module_settings_message">此处与 niconico 应用内的 NicoEnhance 设置共用配置。部分选项需要重新打开 niconico 才会完全生效。</string>
+    <string name="dialog_setting_translation">启用翻译与增强</string>
+    <string name="dialog_setting_runtime">翻译应用界面文字</string>
+    <string name="dialog_setting_webview">翻译 WebView 内容</string>
+    <string name="dialog_setting_ads">去除应用内广告</string>
+    <string name="dialog_setting_premium">解锁会员特权检查</string>
+    <string name="dialog_setting_debug">启用调试日志</string>
+    <string name="dialog_cancel">取消</string>
+    <string name="dialog_save">保存</string>
+
+    <!-- Version -->
+    <string name="version_prefix">v</string>
 </resources>

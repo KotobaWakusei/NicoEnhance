@@ -5,17 +5,16 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.Switch;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
 
 import com.google.android.material.button.MaterialButton;
-import android.widget.TextView;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.Switch;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -36,6 +35,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView moduleStatusText;
     private android.view.View statusDot;
     private CardView moduleStatusCard;
+    private TextView appVersionChip;
     private String currentVersion;
 
     @Override
@@ -48,7 +48,9 @@ public class MainActivity extends AppCompatActivity {
             currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
         } catch (PackageManager.NameNotFoundException ignored) {}
 
-        ((TextView) findViewById(R.id.versionInfo)).setText("v" + currentVersion);
+        appVersionChip = findViewById(R.id.appVersionChip);
+        appVersionChip.setText("v" + currentVersion);
+
         updateStatus = findViewById(R.id.updateStatus);
         moduleStatusText = findViewById(R.id.statusText);
         moduleStatusCard = findViewById(R.id.statusCard);
@@ -65,15 +67,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupClickListeners() {
-        findViewById(R.id.githubCard).setOnClickListener(v -> {
+        findViewById(R.id.btnGitHub).setOnClickListener(v -> {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_REPO));
             startActivity(intent);
         });
 
-        MaterialButton checkBtn = findViewById(R.id.checkUpdateBtn);
+        MaterialButton checkBtn = findViewById(R.id.btnCheckUpdate);
         checkBtn.setOnClickListener(v -> checkForUpdates());
 
-        findViewById(R.id.moduleSettingsBtn).setOnClickListener(v -> showModuleSettingsDialog());
+        findViewById(R.id.btnModuleSettings).setOnClickListener(v -> showModuleSettingsDialog());
 
         findViewById(R.id.statusCard).setOnClickListener(v -> checkModuleStatus());
     }
@@ -81,22 +83,21 @@ public class MainActivity extends AppCompatActivity {
     private void checkModuleStatus() {
         boolean active = isModuleActive();
         if (statusDot != null) {
-            int dotColor = active ? 0xFF4CAF50 : 0xFFF44336;
+            int dotColor = active ? getColor(R.color.status_active) : getColor(R.color.status_inactive);
             statusDot.setBackgroundTintList(
                     android.content.res.ColorStateList.valueOf(dotColor));
-            statusDot.setContentDescription(active ? "模块已激活" : "模块未激活");
+            statusDot.setContentDescription(active
+                    ? getString(R.string.status_dot_active_content)
+                    : getString(R.string.status_dot_inactive_content));
         }
         if (active) {
             String since = moduleActiveLastSeen();
             moduleStatusText.setText(since == null
-                    ? "已检测到 niconico 注入"
-                    : "LSPosed 模块已激活\n上次注入时间：" + since);
+                    ? getString(R.string.status_active)
+                    : getString(R.string.status_active_with_time, since));
         } else {
-            moduleStatusText.setText("尚未检测到近期的 niconico 注入\n"
-                    + "改包名后在 LSPosed 中是一个全新的、默认关闭的模块：\n"
-                    + "1. 启用 io.github.kotobawakusei.nicoenhance\n"
-                    + "2. 确认作用域包含 niconico\n"
-                    + "3. 重启手机（或强制停止 niconico 后重开）");
+            moduleStatusText.setText(getString(R.string.status_inactive));
+            // statusDetail is set separately via refresh hint in XML; keep detailed text in dialog
         }
         moduleStatusCard.setCardBackgroundColor(getColor(R.color.card_background));
     }
@@ -117,8 +118,8 @@ public class MainActivity extends AppCompatActivity {
             final String t = total;
             final String e = exact;
             runOnUiThread(() -> {
-                ((TextView) findViewById(R.id.statTotal)).setText(t);
-                ((TextView) findViewById(R.id.statExact)).setText(e);
+                ((TextView) findViewById(R.id.statTotalValue)).setText(t);
+                ((TextView) findViewById(R.id.statExactValue)).setText(e);
             });
         }).start();
     }
@@ -132,9 +133,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void checkForUpdates() {
-        MaterialButton checkBtn = findViewById(R.id.checkUpdateBtn);
+        MaterialButton checkBtn = findViewById(R.id.btnCheckUpdate);
         checkBtn.setEnabled(false);
-        updateStatus.setText("正在检查 GitHub 最新正式版本…");
+        updateStatus.setText(getString(R.string.update_checking));
         updateStatus.setOnClickListener(null);
         new Thread(() -> {
             HttpURLConnection conn = null;
@@ -163,12 +164,12 @@ public class MainActivity extends AppCompatActivity {
                 }
                 JSONObject release = new JSONObject(body.toString());
                 if (release.optBoolean("draft", false) || release.optBoolean("prerelease", false)) {
-                    throw new java.io.IOException("GitHub 返回的不是正式版本");
+                    throw new java.io.IOException(getString(R.string.update_not_stable));
                 }
                 String tag = release.optString("tag_name", "").trim();
                 String version = tag.replaceFirst("(?i)^v", "");
                 if (!version.matches("\\d+(\\.\\d+){1,3}([+-].*)?")) {
-                    throw new java.io.IOException("无法识别版本标签：" + tag);
+                    throw new java.io.IOException(getString(R.string.update_bad_tag, tag));
                 }
                 try {
                     currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
@@ -176,8 +177,8 @@ public class MainActivity extends AppCompatActivity {
                 final String installed = currentVersion == null ? "0.0.0" : currentVersion;
                 final String releaseUrl = release.optString("html_url", GITHUB_REPO + "/releases/tag/" + tag);
                 final String result = compareVersions(installed, version) >= 0
-                        ? "已是最新版本（当前 " + installed + " / 最新 " + tag + "）"
-                        : "发现新版本：" + tag + "，点击此处打开下载页面";
+                        ? getString(R.string.update_latest, installed, tag)
+                        : getString(R.string.update_available, tag);
                 runOnUiThread(() -> {
                     latestReleaseUrl = releaseUrl;
                     updateStatus.setText(result);
@@ -185,16 +186,16 @@ public class MainActivity extends AppCompatActivity {
                         try {
                             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(latestReleaseUrl)));
                         } catch (Exception e) {
-                            updateStatus.setText("无法打开发布页面：" + e.getClass().getSimpleName());
+                            updateStatus.setText(getString(R.string.update_open_failed, e.getClass().getSimpleName()));
                         }
                     });
                     checkBtn.setEnabled(true);
                 });
             } catch (Exception e) {
                 String detail = e.getMessage();
-                final String message = "检查失败：" + e.getClass().getSimpleName()
-                        + (detail == null || detail.trim().isEmpty() ? "" : "\n" + detail)
-                        + "\n请检查网络，或直接打开 GitHub Releases。";
+                final String message = getString(R.string.update_failed,
+                        e.getClass().getSimpleName(),
+                        detail == null || detail.trim().isEmpty() ? "" : detail);
                 runOnUiThread(() -> {
                     updateStatus.setText(message);
                     updateStatus.setOnClickListener(v -> startActivity(
@@ -251,21 +252,21 @@ public class MainActivity extends AppCompatActivity {
         content.setPadding(dp(8), dp(8), dp(8), dp(8));
         scroll.addView(content, new ScrollView.LayoutParams(
                 ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
-        Switch translation = addSettingSwitch(content, "启用翻译与增强", moduleConfig.isTranslationEnabled());
-        Switch runtime = addSettingSwitch(content, "翻译应用界面文字", moduleConfig.isRuntimeTextTranslationSwitchEnabled());
-        Switch webview = addSettingSwitch(content, "翻译 WebView 内容", moduleConfig.isWebViewTranslationSwitchEnabled());
-        Switch ads = addSettingSwitch(content, "去除应用内广告", moduleConfig.isAdRemovalEnabled());
-        Switch premium = addSettingSwitch(content, "解锁会员特权检查", moduleConfig.isPremiumUnlockEnabled());
-        Switch debug = addSettingSwitch(content, "启用调试日志", moduleConfig.isDebugLogEnabled());
+        Switch translation = addSettingSwitch(content, getString(R.string.dialog_setting_translation), moduleConfig.isTranslationEnabled());
+        Switch runtime = addSettingSwitch(content, getString(R.string.dialog_setting_runtime), moduleConfig.isRuntimeTextTranslationSwitchEnabled());
+        Switch webview = addSettingSwitch(content, getString(R.string.dialog_setting_webview), moduleConfig.isWebViewTranslationSwitchEnabled());
+        Switch ads = addSettingSwitch(content, getString(R.string.dialog_setting_ads), moduleConfig.isAdRemovalEnabled());
+        Switch premium = addSettingSwitch(content, getString(R.string.dialog_setting_premium), moduleConfig.isPremiumUnlockEnabled());
+        Switch debug = addSettingSwitch(content, getString(R.string.dialog_setting_debug), moduleConfig.isDebugLogEnabled());
         new AlertDialog.Builder(this)
-                .setTitle("NicoEnhance 模块设置")
-                .setMessage("此处与 niconico 应用内的 NicoEnhance 设置共用配置。部分选项需要重新打开 niconico 才会完全生效。")
+                .setTitle(getString(R.string.dialog_module_settings_title))
+                .setMessage(getString(R.string.dialog_module_settings_message))
                 .setView(scroll)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("保存", (dialog, which) -> {
+                .setNegativeButton(getString(R.string.dialog_cancel), null)
+                .setPositiveButton(getString(R.string.dialog_save), (dialog, which) -> {
                     moduleConfig.save(this, translation.isChecked(), runtime.isChecked(),
                             webview.isChecked(), ads.isChecked(), debug.isChecked(), premium.isChecked());
-                    updateStatus.setText("模块设置已保存；重开 niconico 可应用所有变更。");
+                    updateStatus.setText(getString(R.string.update_saved));
                 })
                 .show();
     }

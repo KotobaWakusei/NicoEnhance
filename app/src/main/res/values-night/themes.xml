@@ -1,14 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Night theme -->
     <style name="Theme.NicoEnhance" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">#FFFF6B8B</item>
-        <item name="colorPrimaryVariant">#FFE52E63</item>
+        <item name="colorPrimaryContainer">#FF8B245B</item>
         <item name="colorOnPrimary">#FF241018</item>
         <item name="colorSecondary">#FFFF6B8B</item>
+        <item name="colorSecondaryContainer">#FF8B245B</item>
         <item name="colorOnSecondary">#FF241018</item>
+        <item name="colorTertiary">#FFFF6B8B</item>
         <item name="android:colorBackground">#FF121116</item>
         <item name="colorSurface">#FF1E1B23</item>
+        <item name="colorSurfaceContainer">#FF2A252F</item>
+        <item name="colorSurfaceContainerHigh">#FF3A333F</item>
         <item name="colorOnSurface">#FFF5EFF7</item>
         <item name="colorOnSurfaceVariant">#FFCAC3CE</item>
+        <item name="colorOutline">#33FFFFFF</item>
+        <item name="colorOnError">#FFFFFFFF</item>
+        <item name="colorError">#FFFFA79B</item>
+        <item name="android:windowBackground">#FF121116</item>
+        <item name="materialButtonStyle">@style/Widget.MaterialComponents.Button</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.MaterialComponents.MaterialAlertDialog</item>
     </style>
 </resources>

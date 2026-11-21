@@ -8,4 +8,12 @@
     <color name="text_primary">#FFF5EFF7</color>
     <color name="text_secondary">#FFCAC3CE</color>
     <color name="text_tertiary">#FF4A444F</color>
+
+    <!-- Status colors -->
+    <color name="status_active">#FF6EE7B7</color>
+    <color name="status_inactive">#FFFFA79B</color>
+
+    <!-- Surface variants -->
+    <color name="surface_container">#FF2A252F</color>
+    <color name="surface_container_high">#FF3A333F</color>
 </resources>

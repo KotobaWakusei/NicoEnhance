@@ -30,3 +30,7 @@ local.properties
 # --- 本地解包/临时目录 ---
 temp_base_apk/
 niconico_*.apks
+
+# --- 本机构建环境（不入库） ---
+.gradle-home/
+android-sdk/

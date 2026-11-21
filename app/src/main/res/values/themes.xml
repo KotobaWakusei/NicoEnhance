@@ -1,14 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Light theme -->
     <style name="Theme.NicoEnhance" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">#FF2D55</item>
-        <item name="colorPrimaryVariant">#CC2444</item>
+        <item name="colorPrimaryContainer">#FFE9B7C2</item>
         <item name="colorOnPrimary">#FFFFFFFF</item>
         <item name="colorSecondary">#FF2D55</item>
+        <item name="colorSecondaryContainer">#FFE9B7C2</item>
         <item name="colorOnSecondary">#FFFFFFFF</item>
-        <item name="android:colorBackground">#FFF8F8F8</item>
-        <item name="colorSurface">#FFFFFFFF</item>
-        <item name="colorOnSurface">#DE000000</item>
-        <item name="colorOnSurfaceVariant">#99000000</item>
+        <item name="colorTertiary">#FF2D55</item>
+        <item name="android:colorBackground">@color/md3_background</item>
+        <item name="colorSurface">@color/card_background</item>
+        <item name="colorSurfaceContainer">@color/surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/surface_container_high</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+        <item name="colorOutline">#33000000</item>
+        <item name="colorOnError">#FFFFFFFF</item>
+        <item name="colorError">#FFF44336</item>
+        <item name="android:windowBackground">@color/md3_background</item>
+        <item name="materialButtonStyle">@style/Widget.MaterialComponents.Button</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.MaterialComponents.MaterialAlertDialog</item>
     </style>
 </resources>
