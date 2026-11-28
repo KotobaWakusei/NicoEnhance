@@ -2,23 +2,23 @@
 <resources>
     <!-- Night theme -->
     <style name="Theme.NicoEnhance" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">#FFFF6B8B</item>
+        <item name="colorPrimary">@color/nico_red</item>
         <item name="colorPrimaryContainer">#FF8B245B</item>
         <item name="colorOnPrimary">#FF241018</item>
-        <item name="colorSecondary">#FFFF6B8B</item>
+        <item name="colorSecondary">@color/nico_red</item>
         <item name="colorSecondaryContainer">#FF8B245B</item>
         <item name="colorOnSecondary">#FF241018</item>
-        <item name="colorTertiary">#FFFF6B8B</item>
-        <item name="android:colorBackground">#FF121116</item>
-        <item name="colorSurface">#FF1E1B23</item>
-        <item name="colorSurfaceContainer">#FF2A252F</item>
-        <item name="colorSurfaceContainerHigh">#FF3A333F</item>
-        <item name="colorOnSurface">#FFF5EFF7</item>
-        <item name="colorOnSurfaceVariant">#FFCAC3CE</item>
+        <item name="colorTertiary">@color/nico_red</item>
+        <item name="android:colorBackground">@color/md3_background</item>
+        <item name="colorSurface">@color/card_background</item>
+        <item name="colorSurfaceContainer">@color/surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/surface_container_high</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
         <item name="colorOutline">#33FFFFFF</item>
         <item name="colorOnError">#FFFFFFFF</item>
-        <item name="colorError">#FFFFA79B</item>
-        <item name="android:windowBackground">#FF121116</item>
+        <item name="colorError">@color/status_inactive</item>
+        <item name="android:windowBackground">@color/md3_background</item>
         <item name="materialButtonStyle">@style/Widget.MaterialComponents.Button</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.MaterialComponents.MaterialAlertDialog</item>
     </style>

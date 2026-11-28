@@ -11,16 +11,8 @@ import android.os.Bundle;
 import android.os.Process;
 
 public final class ConfigProvider extends ContentProvider {
-    public static final String AUTHORITY = "io.github.kotobawakusei.nicoenhance.config";
-    public static final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY);
-    private static final String PREFS_NAME = "nicoenhance_config";
-    private static final String TARGET_PACKAGE = "jp.nicovideo.android";
-    private static final String[] KEYS = {
-            "translation_enabled", "runtime_text_translation_enabled",
-            "webview_translation_enabled", "ad_removal_enabled",
-            "debug_log_enabled", "premium_unlock_enabled"
-    };
-    private static final boolean[] DEFAULTS = {true, true, true, true, false, true};
+    public static final String AUTHORITY = ModuleConstants.CONFIG_AUTHORITY;
+    public static final Uri CONTENT_URI = ModuleConstants.CONFIG_URI;
 
     @Override public boolean onCreate() { return true; }
 
@@ -29,20 +21,20 @@ public final class ConfigProvider extends ContentProvider {
         if (!isAllowedCaller()) throw new SecurityException("Caller is not authorized for NicoEnhance config");
         Context context = getContext();
         if (context == null) return null;
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences prefs = context.getSharedPreferences(ModuleConstants.PREFS_NAME, Context.MODE_PRIVATE);
         Bundle result = new Bundle();
         if ("getConfig".equals(method)) {
-            for (int i = 0; i < KEYS.length; i++) result.putBoolean(KEYS[i], prefs.getBoolean(KEYS[i], DEFAULTS[i]));
-            result.putBoolean("config_initialized", prefs.getBoolean("config_initialized", false));
+            for (int i = 0; i < ModuleConstants.CONFIG_KEYS.length; i++) result.putBoolean(ModuleConstants.CONFIG_KEYS[i], prefs.getBoolean(ModuleConstants.CONFIG_KEYS[i], ModuleConstants.CONFIG_DEFAULTS[i]));
+            result.putBoolean(ModuleConstants.KEY_CONFIG_INITIALIZED, prefs.getBoolean(ModuleConstants.KEY_CONFIG_INITIALIZED, false));
             return result;
         }
         if ("saveConfig".equals(method)) {
             if (extras == null) return result;
             SharedPreferences.Editor editor = prefs.edit();
-            for (int i = 0; i < KEYS.length; i++) {
-                editor.putBoolean(KEYS[i], extras.getBoolean(KEYS[i], prefs.getBoolean(KEYS[i], DEFAULTS[i])));
+            for (int i = 0; i < ModuleConstants.CONFIG_KEYS.length; i++) {
+                editor.putBoolean(ModuleConstants.CONFIG_KEYS[i], extras.getBoolean(ModuleConstants.CONFIG_KEYS[i], prefs.getBoolean(ModuleConstants.CONFIG_KEYS[i], ModuleConstants.CONFIG_DEFAULTS[i])));
             }
-            editor.putBoolean("config_initialized", true);
+            editor.putBoolean(ModuleConstants.KEY_CONFIG_INITIALIZED, true);
             editor.apply();
             result.putBoolean("ok", true);
             return result;
@@ -53,7 +45,7 @@ public final class ConfigProvider extends ContentProvider {
             if (!isTargetCaller()) {
                 throw new SecurityException("Only niconico may report target hook activity");
             }
-            prefs.edit().putLong("last_target_hook_ts", System.currentTimeMillis()).apply();
+            prefs.edit().putLong(ModuleConstants.KEY_LAST_TARGET_HOOK_TS, System.currentTimeMillis()).apply();
             result.putBoolean("ok", true);
             return result;
         }
@@ -66,7 +58,7 @@ public final class ConfigProvider extends ContentProvider {
         String[] packages = context.getPackageManager().getPackagesForUid(Binder.getCallingUid());
         if (packages == null) return false;
         for (String packageName : packages) {
-            if (TARGET_PACKAGE.equals(packageName)) return true;
+            if (ModuleConstants.TARGET_PACKAGE.equals(packageName)) return true;
         }
         return false;
     }
@@ -77,7 +69,7 @@ public final class ConfigProvider extends ContentProvider {
         if (context == null) return false;
         String[] packages = context.getPackageManager().getPackagesForUid(Binder.getCallingUid());
         if (packages == null) return false;
-        for (String packageName : packages) if (TARGET_PACKAGE.equals(packageName)) return true;
+        for (String packageName : packages) if (ModuleConstants.TARGET_PACKAGE.equals(packageName)) return true;
         return false;
     }
 

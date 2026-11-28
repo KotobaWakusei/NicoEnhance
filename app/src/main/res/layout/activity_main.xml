@@ -699,6 +699,18 @@
                 app:cornerRadius="12dp"
                 android:layout_marginEnd="8dp" />
 
+            <!-- Open LSPosed Manager Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLSPosed"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/btn_lsposed"
+                android:textSize="14sp"
+                app:cornerRadius="12dp"
+                android:layout_marginEnd="8dp" />
+
             <!-- GitHub Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnGitHub"
@@ -709,7 +721,6 @@
                 android:text="@string/btn_github"
                 android:textSize="14sp"
                 app:cornerRadius="12dp"
-                android:layout_marginStart="8dp"
                 android:layout_marginEnd="8dp" />
 
             <!-- Check Update Button -->

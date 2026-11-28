@@ -1,1 +1,0 @@
-ci: fix rolling release condition to use secrets directly

@@ -49,19 +49,9 @@ import io.github.libxposed.api.XposedModule;
 
 public class NicoEnhance extends XposedModule {
 
-    /**
-     * Settings.Secure key used as a process-global "ModuleActive" sentinel.
-     * Written from the niconico process by {@link #writeModuleActiveSentinel(long)} after the
-     * module finishes installing its hooks; read by {@link MainActivity#isModuleActive()}.
-     * Chosen because Settings.Secure is writable from any app process on Android <12 without
-     * signature permissions, narrow collision (just a uint64 timestamp string), and survives
-     * process / module restarts.
-     */
-    static final String SETTINGS_SENTINEL_KEY = "nicoenhance_module_active_ts";
-
     private static final String TAG = "NicoEnhance";
-    private static final String TARGET = "jp.nicovideo.android";
-    private static final String MODULE = "io.github.kotobawakusei.nicoenhance";
+    private static final String TARGET = ModuleConstants.TARGET_PACKAGE;
+    private static final String MODULE = ModuleConstants.MODULE_PACKAGE;
     private static final String COPYRIGHT_ASSET_URL = "file:///android_asset/copyright/copyright.html";
     private static final String COPYRIGHT_BASE_URL = "file:///android_asset/copyright/";
     private static final String SUPPORTER_RENDERER_ASSET_URL = "file:///android_asset/supporter_renderer/index.html";
@@ -71,29 +61,29 @@ public class NicoEnhance extends XposedModule {
     private static final String SETTINGS_BUTTON_TAG = "nicoenhance_settings_button";
     private static final String SETTINGS_ENTRY_TITLE = "NicoEnhance";
     private static final String CONFIG_DIALOG_TITLE = "NicoEnhance";
-    private static final String CONFIG_GROUP_TRANSLATION = "\u7ffb \u8bd1";
-    private static final String CONFIG_GROUP_AD = "\u5e7f \u544a";
-    private static final String CONFIG_GROUP_PREMIUM = "\u4f1a \u5458";
-    private static final String CONFIG_GROUP_DEBUG = "\u8c03 \u8bd5";
-    private static final String CONFIG_TRANSLATION_ENABLED = "\u542f\u7528\u7ffb\u8bd1\u4e0e\u589e\u5f3a";
-    private static final String CONFIG_RUNTIME_TRANSLATION_TITLE = "\u7ffb\u8bd1\u5e94\u7528\u6587\u672c";
+    private static final String CONFIG_GROUP_TRANSLATION = "翻 译";
+    private static final String CONFIG_GROUP_AD = "广 告";
+    private static final String CONFIG_GROUP_PREMIUM = "会 员";
+    private static final String CONFIG_GROUP_DEBUG = "调 试";
+    private static final String CONFIG_TRANSLATION_ENABLED = "启用翻译与增强";
+    private static final String CONFIG_RUNTIME_TRANSLATION_TITLE = "翻译应用文本";
     private static final String CONFIG_RUNTIME_TRANSLATION_SUMMARY =
-            "\u5c06\u63a5\u53e3\u3001\u8bbe\u7f6e\u9875\u4e2d\u7684\u65e5\u6587\u7ffb\u8bd1\u4e3a\u7b80\u4f53\u4e2d\u6587\u3002";
-    private static final String CONFIG_WEBVIEW_TRANSLATION_TITLE = "\u7ffb\u8bd1 WebView \u5185\u5bb9";
+            "将接口、设置页中的日文翻译为简体中文。";
+    private static final String CONFIG_WEBVIEW_TRANSLATION_TITLE = "翻译 WebView 内容";
     private static final String CONFIG_WEBVIEW_TRANSLATION_SUMMARY =
-            "\u7ffb\u8bd1\u7248\u6743\u9875\u4e0e\u8d5e\u52a9\u8005\u6e32\u67d3\u5668\u5185\u5bb9\u3002";
-    private static final String CONFIG_AD_REMOVAL_TITLE = "\u53bb\u9664\u5e7f\u544a";
+            "翻译版权页与赞助者渲染器内容。";
+    private static final String CONFIG_AD_REMOVAL_TITLE = "去除广告";
     private static final String CONFIG_AD_REMOVAL_SUMMARY =
-            "\u9690\u85cf\u5e94\u7528\u5185\u5e7f\u544a\u4e0e\u89c6\u9891\u524d\u8d34\u7247\u5e7f\u544a\u3002";
-    private static final String CONFIG_DEBUG_LOG_TITLE = "\u8c03\u8bd5\u65e5\u5fd7";
+            "隐藏应用内广告与视频前贴片广告。";
+    private static final String CONFIG_DEBUG_LOG_TITLE = "调试日志";
     private static final String CONFIG_DEBUG_LOG_SUMMARY =
-            "\u8f93\u51fa\u8be6\u7ec6\u7684\u8c03\u8bd5\u4fe1\u606f\uff0c\u6b63\u5e38\u4f7f\u7528\u65f6\u5173\u95ed\u3002";
-    private static final String CONFIG_PREMIUM_UNLOCK_TITLE = "\u89e3\u9501\u4f1a\u5458\u7279\u6743";
+            "输出详细的调试信息，正常使用时关闭。";
+    private static final String CONFIG_PREMIUM_UNLOCK_TITLE = "解锁会员特权";
     private static final String CONFIG_PREMIUM_UNLOCK_SUMMARY =
-            "\u8d85\u8d8a\u4f1a\u5458\u80fd\u529b\u68c0\u67e5\uff0c\u542f\u7528\u540e\u754c\u9762\u4e0a\u4f1a\u5458\u72ec\u4eab\u9879\u4e5f\u53ef\u7528\u3002";
-    private static final String CONFIG_SAVE = "\u4fdd\u5b58";
-    private static final String CONFIG_CANCEL = "\u53d6\u6d88";
-    private static final String CONFIG_SAVED = "\u5df2\u4fdd\u5b58\uff0c\u90e8\u5206\u9875\u9762\u9700\u91cd\u65b0\u8fdb\u5165\u6216\u91cd\u542f niconico";
+            "超越会员能力检查，启用后界面上会员独享项也可用。";
+    private static final String CONFIG_SAVE = "保存";
+    private static final String CONFIG_CANCEL = "取消";
+    private static final String CONFIG_SAVED = "已保存，部分页面需重新进入或重启 niconico";
 
     /** Number of independent app-hook steps; used as a fast "all installed" check. */
     private static final int APP_HOOK_COUNT = 5;
@@ -160,51 +150,6 @@ public class NicoEnhance extends XposedModule {
             } catch (Exception e) {
                 log(Log.WARN, TAG, "Failed to get ClassLoader from PackageLoadedParam, will retry onPackageReady", e);
             }
-        } else if (MODULE.equals(pkg)) {
-            installSelfHook();
-        }
-    }
-
-    private void installSelfHook() {
-        try {
-            Class<?> mainActivity = MainActivity.class;
-            Method isSelfHooked = mainActivity.getDeclaredMethod("isSelfHooked");
-            isSelfHooked.setAccessible(true);
-            hook(isSelfHooked)
-                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-                    .intercept(chain -> true);
-            writeSelfCheckFlag();
-            log(Log.INFO, TAG, "Self-hook installed: isSelfHooked() -> true");
-        } catch (Throwable t) {
-            log(Log.WARN, TAG, "Self-hook failed, falling back to file check", t);
-            writeSelfCheckFlag();
-        }
-    }
-
-    @Override
-    public void onPackageReady(PackageReadyParam param) {
-        if (!TARGET.equals(param.getPackageName())) return;
-        log(Log.INFO, TAG, "NicoEnhance: package ready for " + TARGET);
-        if (repo == null) repo = TranslationRepository.fromModuleApk(getModuleApplicationInfo().sourceDir);
-        installResourceHooks();
-        installAppHooks(param.getClassLoader());
-    }
-
-    @Override
-    public boolean onHotReloading(HotReloadingParam param) {
-        return true;
-    }
-
-    private void writeSelfCheckFlag() {
-        try {
-            String dataDir = getModuleApplicationInfo().dataDir;
-            if (dataDir == null || dataDir.isEmpty()) return;
-            java.io.File f = new java.io.File(dataDir, "files/.module_active");
-            java.io.File parent = f.getParentFile();
-            if (parent != null && !parent.exists() && !parent.mkdirs() && !parent.exists()) return;
-            f.createNewFile();
-        } catch (Throwable t) {
-            log(Log.WARN, TAG, "Failed to write self-check flag", t);
         }
     }
 
@@ -268,7 +213,7 @@ public class NicoEnhance extends XposedModule {
 
     private void installAppHooks(ClassLoader classLoader) {
         if (installedAppHooks.size() >= APP_HOOK_COUNT) {
-            writeModuleActiveSentinel();
+            reportTargetInjection();
             return;
         }
         try (ClassNameProvider provider = ClassNameProvider.open(classLoader)) {
@@ -289,17 +234,16 @@ public class NicoEnhance extends XposedModule {
         }
         // This timestamp proves target-process injection, not that every optional feature hook
         // matched this particular niconico version.
-        writeModuleActiveSentinel();
+        reportTargetInjection();
     }
 
     /**
-     * After all hooks installed, drop a sentinel where {@link MainActivity} can reach it.
-     * Best-effort: writing {@link android.provider.Settings.System} requires WRITE_SETTINGS
-     * (not held by the target app), so this may throw on modern Android; the failure is
-     * swallowed and {@link MainActivity} falls back to its other activation signals
-     * (in-process library maps probe, LSPosed marker dirs, module data-dir flag).
+     * After the hooks are installed, tell the module UI that the target process injected.
+     * The target calls {@code ConfigProvider#call(..., "markActive", ...)}, which only accepts
+     * callers whose UID resolves to {@code jp.nicovideo.android}; the module UI's own process
+     * therefore cannot fake it. Best-effort: failures are swallowed so hooks stay unaffected.
      */
-    private void writeModuleActiveSentinel() {
+    private void reportTargetInjection() {
         try {
             Class<?> activityThread = Class.forName("android.app.ActivityThread");
             Method currentApplication = activityThread.getMethod("currentApplication");
@@ -307,7 +251,7 @@ public class NicoEnhance extends XposedModule {
             if (!(app instanceof Context)) return;
             Context ctx = (Context) app;
             Bundle result = ctx.getContentResolver().call(
-                    android.net.Uri.parse("content://io.github.kotobawakusei.nicoenhance.config"),
+                    ModuleConstants.CONFIG_URI,
                     "markActive", null, null);
             if (result != null && result.getBoolean("ok", false)) {
                 log(Log.INFO, TAG, "Target-process injection timestamp recorded");
@@ -1552,12 +1496,12 @@ public class NicoEnhance extends XposedModule {
                     + "<html><head>"
                     + "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />"
                     + "<meta http-equiv=\"Content-Script-Type\" content=\"text/javascript\" />"
-                    + "<title>niconico | \u7248\u6743\u4fe1\u606f</title>"
+                    + "<title>niconico | 版权信息</title>"
                     + "<link rel=\"stylesheet\" href=\"style.css\" type=\"text/css\" />"
                     + "<meta name=\"viewport\" content=\"width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0\" />"
                     + "</head><body><div id=\"content\">"
-                    + "<span style=\"color:#0099ff; font-size:18px\"><strong>\u7248\u6743\u4fe1\u606f</strong></span>"
-                    + "<div class=\"contentBlock\"><p>niconico (niconico \u52a8\u753b / niconico \u76f4\u64ad)</p>"
+                    + "<span style=\"color:#0099ff; font-size:18px\"><strong>版权信息</strong></span>"
+                    + "<div class=\"contentBlock\"><p>niconico (niconico 动画 / niconico 直播)</p>"
                     + "<p>(C) DWANGO Co., Ltd.</p></div>"
                     + "</div></body></html>";
             webView.loadDataWithBaseURL(COPYRIGHT_BASE_URL, html, "text/html", "UTF-8", null);
@@ -1597,11 +1541,11 @@ public class NicoEnhance extends XposedModule {
 
     private String translateSupporterRendererScript(String script) {
         return script
-                .replace("\"ja-jp\":\"\u63d0\u3000\u4f9b\"", "\"ja-jp\":\"\u8d5e\u3000\u52a9\"")
-                .replace("\"zh-tw\":\"\u8d0a\u3000\u52a9\"", "\"zh-tw\":\"\u8d5e\u3000\u52a9\"")
-                .replace("\"\u5de6\u5074\u30b5\u30a4\u30c9\u30d0\u30ca\u30fc\"", "\"\u5de6\u4fa7\u8fb9\u680f\u6a2a\u5e45\"")
-                .replace("\"\u53f3\u5074\u30b5\u30a4\u30c9\u30d0\u30ca\u30fc\"", "\"\u53f3\u4fa7\u8fb9\u680f\u6a2a\u5e45\"")
-                .replace("\"ready()\u304c\u5b8c\u4e86\u3057\u3066\u3044\u307e\u305b\u3093\"", "\"ready() \u5c1a\u672a\u5b8c\u6210\"");
+                .replace("\"ja-jp\":\"提　供\"", "\"ja-jp\":\"赞　助\"")
+                .replace("\"zh-tw\":\"贊　助\"", "\"zh-tw\":\"赞　助\"")
+                .replace("\"左側サイドバナー\"", "\"左侧边栏横幅\"")
+                .replace("\"右側サイドバナー\"", "\"右侧边栏横幅\"")
+                .replace("\"ready()が完了していません\"", "\"ready() 尚未完成\"");
     }
 
     private String translateWebContent(String data) {

@@ -14,7 +14,7 @@ import java.util.zip.ZipFile;
 
 public class TranslationRepository {
     private static final String TAG = "NicoEnhance";
-    private static final String TARGET_PACKAGE = "jp.nicovideo.android";
+    private static final String TARGET_PACKAGE = ModuleConstants.TARGET_PACKAGE;
     private static final String STRING_TYPE = "string";
     private static final String PLURALS_TYPE = "plurals";
     private static final String ARRAY_TYPE = "array";

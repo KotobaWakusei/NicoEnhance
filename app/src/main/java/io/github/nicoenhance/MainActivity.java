@@ -9,6 +9,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
@@ -76,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
         checkBtn.setOnClickListener(v -> checkForUpdates());
 
         findViewById(R.id.btnModuleSettings).setOnClickListener(v -> showModuleSettingsDialog());
+        findViewById(R.id.btnLSPosed).setOnClickListener(v -> openLSPosed());
 
         findViewById(R.id.statusCard).setOnClickListener(v -> checkModuleStatus());
     }
@@ -90,16 +92,43 @@ public class MainActivity extends AppCompatActivity {
                     ? getString(R.string.status_dot_active_content)
                     : getString(R.string.status_dot_inactive_content));
         }
+        TextView detail = findViewById(R.id.statusDetail);
         if (active) {
             String since = moduleActiveLastSeen();
             moduleStatusText.setText(since == null
                     ? getString(R.string.status_active)
                     : getString(R.string.status_active_with_time, since));
+            if (detail != null) {
+                detail.setText(getString(R.string.status_refresh_hint));
+            }
+            moduleStatusCard.setOnClickListener(v -> checkModuleStatus());
         } else {
             moduleStatusText.setText(getString(R.string.status_inactive));
-            // statusDetail is set separately via refresh hint in XML; keep detailed text in dialog
+            if (detail != null) {
+                detail.setText(getString(R.string.status_inactive_detail));
+            }
+            // 未激活时点卡片直达 LSPosed，比刷新有用
+            moduleStatusCard.setOnClickListener(v -> openLSPosed());
         }
         moduleStatusCard.setCardBackgroundColor(getColor(R.color.card_background));
+    }
+
+    private void openLSPosed() {
+        // 优先深链直达本模块页面（LSPosed 支持 lsposed://module/<包名>）
+        Intent deep = new Intent(Intent.ACTION_VIEW,
+                Uri.parse("lsposed://module/" + getPackageName()));
+        try {
+            startActivity(deep);
+            return;
+        } catch (Exception ignored) {
+        }
+        // 退而求其次：打开 LSPosed 管理器主页
+        Intent launch = getPackageManager().getLaunchIntentForPackage("org.lsposed.manager");
+        if (launch != null) {
+            startActivity(launch);
+        } else {
+            Toast.makeText(this, R.string.lsposed_not_found, Toast.LENGTH_LONG).show();
+        }
     }
 
     private void loadTranslationStats() {
@@ -230,15 +259,15 @@ public class MainActivity extends AppCompatActivity {
      * The module app being self-hooked or an old marker file is not proof of target injection.
      */
     public boolean isModuleActive() {
-        long timestamp = getSharedPreferences(ModuleConfig.PREFS_NAME, MODE_PRIVATE)
-                .getLong("last_target_hook_ts", 0L);
+        long timestamp = getSharedPreferences(ModuleConstants.PREFS_NAME, MODE_PRIVATE)
+                .getLong(ModuleConstants.KEY_LAST_TARGET_HOOK_TS, 0L);
         long age = System.currentTimeMillis() - timestamp;
         return timestamp > 0L && age >= 0L && age <= ACTIVE_WINDOW_MS;
     }
 
     private String moduleActiveLastSeen() {
-        long timestamp = getSharedPreferences(ModuleConfig.PREFS_NAME, MODE_PRIVATE)
-                .getLong("last_target_hook_ts", 0L);
+        long timestamp = getSharedPreferences(ModuleConstants.PREFS_NAME, MODE_PRIVATE)
+                .getLong(ModuleConstants.KEY_LAST_TARGET_HOOK_TS, 0L);
         if (timestamp <= 0L) return null;
         return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",
                 java.util.Locale.getDefault()).format(new java.util.Date(timestamp));

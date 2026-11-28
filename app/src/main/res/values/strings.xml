@@ -46,6 +46,8 @@
 
     <!-- Buttons -->
     <string name="btn_module_settings">模块设置</string>
+    <string name="btn_lsposed">打开 LSPosed</string>
+    <string name="lsposed_not_found">未检测到 LSPosed 管理器，请确认已安装 LSPosed 并启用本模块</string>
     <string name="btn_github">查看 GitHub</string>
     <string name="btn_check_update">检查更新</string>
 
